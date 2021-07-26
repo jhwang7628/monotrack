@@ -22,11 +22,11 @@ sigma = 2.5
 
 #game_list = ['TaiTzuYing_vs_AkaneYAMAGUCHI_2018AllEnglandOpenMatch_Final', 'TaiTzuYing_vs_ChenYufei_2018AllEnglandOpenMatch_semiFinal']
 #p = os.path.join(game_list[0], 'frame', '0_0_0', '1.png')
-game_list = ['match1', 'match2', 'match3']#, 'match4', 'match5']#, 'match6', 'match7', 'match8', 'match9', 'match10', 'match11', 'match12', 'match13', 'match14', 'match15']
+game_list = ['match1', 'match2', 'match3', 'match4', 'match5', 'match6', 'match7', 'match8', 'match9', 'match10', 'match11', 'match12', 'match13', 'match14', 'match15']
 
 # First generate the frames
 for game in game_list:
-    gameDir = os.path.join('data', game)
+    gameDir = os.path.join('/home/code-base/scratch_space/data/', game)
     frameDir = os.path.join(gameDir, 'frame')
     rallyDir = os.path.join(gameDir, 'rally_video')
     os.makedirs(frameDir, exist_ok=True)
@@ -44,10 +44,11 @@ for game in game_list:
           success,image = vidcap.read()
           count += 1
 
-p = os.path.join('data', game_list[0], 'frame', '1_01_00', '1.jpg')
+exit()
+p = os.path.join('/home/code-base/scratch_space/data/', game_list[0], 'frame', '1_01_00', '1.jpg')
 a = img_to_array(load_img(p))
 ratio = a.shape[0] / HEIGHT
-dataDir = 'npy'
+dataDir = 'npy-hitnet'
 
 if os.path.exists(dataDir):
     shutil.rmtree(dataDir)
@@ -56,13 +57,13 @@ os.makedirs(dataDir)
 count = 1
 
 for game in game_list:
-    all_path = glob(os.path.join('data', game, 'frame', '*'))
+    all_path = glob(os.path.join('/home/code-base/scratch_space/data/', game, 'frame', '*'))
     train_path = all_path[:int(len(all_path)*0.8)]
     # train_path = all_path[int(len(all_path)*0.8):]
     for i in range(len(train_path)):
-        train_path[i] = train_path[i][len(os.path.join('data', game, 'frame')) + 1:]
+        train_path[i] = train_path[i][len(os.path.join('/home/code-base/scratch_space/data/', game, 'frame')) + 1:]
     for p in train_path:
-        labelPath = os.path.join('data', game, 'shot', p + '_hit.csv')
+        labelPath = os.path.join('/home/code-base/scratch_space/data/', game, 'shot', p + '_hit.csv')
         data = pd.read_csv(labelPath)
         no = data['frame'].values
         h = data['hit'].values
@@ -70,7 +71,7 @@ for game in game_list:
         # 7 for good luck
         h[-7] = 1
         num = no.shape[0]
-        r = os.path.join('data', game, 'frame', p)
+        r = os.path.join('/home/code-base/scratch_space/data/', game, 'frame', p)
         x_data_tmp = []
         y_data_tmp = []
         for i in range(num-2):

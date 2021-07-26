@@ -15,11 +15,17 @@ from keras.activations import *
 import tensorflow as tf
 import cv2
 import math
+import gc
+
 BATCH_SIZE=3
 HEIGHT=288
 WIDTH=512
 mag = 1
 sigma = 2.5
+
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+for device in gpu_devices:
+    tf.config.experimental.set_memory_growth(device, True)
 
 #Return the numbers of true positive, true negative, false positive and false negative
 def outcome(y_pred, y_true, tol):
@@ -148,10 +154,10 @@ def custom_loss(y_true, y_pred):
 if paramCount['load_weights'] == 0:
 	model=TrackNet3(HEIGHT, WIDTH)
 	ADADELTA = optimizers.Adadelta(lr=1.0)
-	model.compile(loss=custom_loss, optimizer=ADADELTA, metrics=['accuracy'])
+	model.compile(loss=custom_loss, optimizer=ADADELTA, metrics=['accuracy', tf.keras.metrics.Recall(), tf.keras.metrics.Precision()])
 #Retraining
 else:
-	model = load_model(load_weights, custom_objects={'custom_loss':custom_loss})
+	model = tf.keras.models.load_model(load_weights, custom_objects={'custom_loss':custom_loss})
 
 r = os.path.abspath(os.path.join(dataDir))
 path = glob(os.path.join(r, '*.npy'))
@@ -167,6 +173,7 @@ for i in range(epochs):
 		model.fit(x_train, y_train, batch_size=BATCH_SIZE, epochs=1)
 		del x_train
 		del y_train
+		gc.collect()
 	#Show the outcome of training data so long
 	TP = TN = FP1 = FP2 = FN = 0
 	for j in idx:
@@ -184,6 +191,8 @@ for i in range(epochs):
 		del x_train
 		del y_train
 		del y_pred
+		gc.collect()
+
 	print("Outcome of training data of epoch " + str(i+1) + ":")
 	print("Number of true positive:", TP)
 	print("Number of true negative:", TN)
@@ -192,7 +201,7 @@ for i in range(epochs):
 	print("Number of false negative:", FN)
 	#Save intermediate weights during training
 	if (i + 1) % 3 == 0:
-		model.save(save_weights + '_' + str(i + 1))
+		model.save(save_weights + '_' + str(i + 1), save_format='h5')
 
 print('Saving weights......')
 model.save(save_weights)

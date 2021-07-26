@@ -55,17 +55,17 @@ def HitNet( input_height, input_width ): #input_height = 288, input_width = 512
     x = ( Activation('relu'))(x)
     x = ( BatchNormalization())(x)
 
+    #Last layers (train layers from this point)
     #Layer12
-    x = ( Conv2D(512, (3, 3), kernel_initializer='random_uniform', padding='same', data_format='channels_first'))(x)
+    x = ( Conv2D(64, (3, 3), kernel_initializer='random_uniform', padding='same', data_format='channels_first'))(x)
     x = ( Activation('relu'))(x)
     x = ( BatchNormalization())(x)
 
     #Layer13
-    x = ( Conv2D(512, (3, 3), kernel_initializer='random_uniform', padding='same', data_format='channels_first'))(x)
+    x = ( Conv2D(16, (3, 3), kernel_initializer='random_uniform', padding='same', data_format='channels_first'))(x)
     x = ( Activation('relu'))(x)
     x = ( BatchNormalization())(x)
 
-    #Last layers (train layers from this point)
     x = Flatten()(x)
     x = Dense(1, activation='sigmoid')(x)
 
@@ -76,5 +76,6 @@ def HitNet( input_height, input_width ): #input_height = 288, input_width = 512
     output = x
 
     model = Model(imgs_input , output)
+    model.ncustom = 8
 
     return model
