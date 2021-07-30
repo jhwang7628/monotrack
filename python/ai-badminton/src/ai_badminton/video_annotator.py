@@ -20,6 +20,7 @@ def annotate_video(cap,
                    trajectory,
                    result=None,
                    is_hit=None,
+                   frame_limit=None,
                    outfile='./output/output.mp4'):
     try:
         os.makedirs('output')
@@ -39,7 +40,10 @@ def annotate_video(cap,
     bid = 0
     import tqdm.notebook as tq
 
-    L = poses[0].values.shape[0]
+    L = frame_limit
+    if not frame_limit:
+        L = min(poses[0].values.shape[0], len(Xb))
+        
     for i in tq.tqdm(range(L)):
         ret, frame = cap.read()
         frame = court.draw_lines(frame)

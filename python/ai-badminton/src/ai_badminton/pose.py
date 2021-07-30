@@ -99,7 +99,6 @@ def read_player_poses(input_prefix):
     return poses
         
 '''
-TODO: Figure out a better way than to use 'root_name'
 Processes the raw text pose output from the pose estimation scripts.
 '''
 def process_pose_file(input_path, output_prefix, court):
