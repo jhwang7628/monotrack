@@ -56,3 +56,19 @@ semicolon ";".  The points are in the following order:
 16. Intersection of the right side line with the net line
 ```
 
+## Known issues
+
+Jui:
+- (073021) When compiling on my arch linux machine (x86_64 gcc 11.1), libtiff defaults to static
+library build and I couldn't figure out how to switch it to shared library build (e.g., I tried to
+pass in
+```
+[options]
+Shared=True
+```
+to conanfile to no avail). However, the error seems to just be missing these two files:
+`/usr/lib/libjpeg.a` and `/usr/lib/libturbojpeg.a`. My hack around this issue is to symlink the so
+version of the two libraries to the static ones, and that somehow tricked the compiler and conan. It
+builds everything fine afterwards, and it seems that the runtime does not use those either so runs
+fine.
+
