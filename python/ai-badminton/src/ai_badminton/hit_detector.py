@@ -160,6 +160,8 @@ class MLHitDetector(HitDetector):
 
         is_hit = []
         avg_hit = np.average(np.diff(result))
+        last_hit, last_time = -1, -1
+        to_delete = [0] * len(result)
         for i, fid in enumerate(result):
             if i+1 < len(result) and result[i+1] - fid > 1.6 * avg_hit:
                 is_hit.append(0)
@@ -167,8 +169,17 @@ class MLHitDetector(HitDetector):
             if i >= len(who_hit):
                 break
                 
+            # Another filter: prevent two hits in a row by the same person within 1s
+            if fid - last_time < fps and last_hit == who_hit[i]:
+                to_delete[i] = 1
+                continue
+                
             is_hit.append(who_hit[i])
-
+            last_time = fid
+            last_hit = who_hit[i]
+            
+        result = [r for i, r in enumerate(result) if not to_delete[i]]
+        
         print('Total shots hit by players:', sum(x > 0 for x in is_hit))
         print('Total impacts detected:', len(result))
         print('Distribution of shot times:')

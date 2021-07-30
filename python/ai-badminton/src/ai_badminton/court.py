@@ -32,7 +32,7 @@ class Court:
     eps = 0.01
     
     def __init__(self, corners = None):
-        if not corners:
+        if corners is None:
             print('This court object must be manually labelled. See Court.manually_label.')
             return
         
@@ -101,7 +101,7 @@ class Court:
     def draw_hit(self, img, pos, colour=(255,0,0)):
         # pos must be a vec in [0,1]^2 representing position on the 2d court
         centre = (int(pos[0] * img.shape[1]), int((1.-pos[1]) * img.shape[0]))
-        radius = 4
+        radius = 8
         thickness = -1
         return cv2.circle(img, centre, radius, colour, thickness)
     
