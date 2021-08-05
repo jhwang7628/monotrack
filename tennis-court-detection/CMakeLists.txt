@@ -21,7 +21,7 @@ add_executable(detect ${INC_FILES} ${SRC_FILES})
 target_include_directories(detect PRIVATE
     ${opencv_SOURCE_DIR}/include
 )
-target_compile_features(lagrange_physics PUBLIC cxx_std_11)
+target_compile_features(detect PUBLIC cxx_std_11)
 
 unset(opencv_modules)
 list(APPEND opencv_modules
