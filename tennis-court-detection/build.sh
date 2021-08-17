@@ -2,13 +2,8 @@
 
 set -x
 
-if [ -d build ] || [ -f build ]; then
-    rm -rf build
-fi
-
-mkdir build
+mkdir -p build
 cd build
 
-# conan install .. --build missing
 cmake ..
 cmake --build .

@@ -36,6 +36,8 @@ private:
 
   cv::Mat filterLinePixels(const cv::Mat& binaryImage, const cv::Mat& luminanceImage);
 
+  // cv::Mat blurLinePixels(const cv::Mat& image, int ksize=16);
+
   uchar isLinePixel(const cv::Mat& image, unsigned int x, unsigned int y);
 
   void computeStructureTensorElements(const cv::Mat& image, cv::Mat& dx2, cv::Mat& dxy, cv::Mat& dy2);

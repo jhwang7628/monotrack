@@ -23,6 +23,12 @@ Line Line::fromRhoTheta(float rho, float theta)
 Line Line::fromTwoPoints(cv::Point2f p1, cv::Point2f p2)
 {
   Point2f vec = p2 - p1;
+  // Make directions always point positive so that we can
+  // compare them reliably.
+  if (vec.x < 0) {
+    vec.x *= -1;
+    vec.y *= -1;
+  }
   return Line(p1, vec);
 }
 
@@ -31,6 +37,13 @@ Line::Line(cv::Point2f point, cv::Point2f vector)
   , v(normalize(vector))
 {
 
+}
+
+Line::Line() 
+  : u(cv::Point2f(0,0))
+  , v(cv::Point2f(0,0))
+{
+  
 }
 
 cv::Point2f Line::getPoint() const
@@ -44,6 +57,13 @@ cv::Point2f Line::getVector() const
   return v;
 }
 
+// This is a signed perpendicular distance
+float Line::getPerpendicularDistance(const cv::Point2f& point) const
+{
+  Point2f pointOnLine = getPointOnLineClosestTo(point);
+  return (point - pointOnLine).dot(perpendicular(v));
+}
+
 float Line::getDistance(const cv::Point2f& point) const
 {
   Point2f pointOnLine = getPointOnLineClosestTo(point);
@@ -52,27 +72,19 @@ float Line::getDistance(const cv::Point2f& point) const
 
 cv::Point2f Line::getPointOnLineClosestTo(const cv::Point2f point) const
 {
-  Point2f n;
-  float c;
-  toImplicit(n, c);
-  float q = c - n.dot(point);
-  return point - q*n;
+  // u + [(p-u) . v] * v
+  return u + v.dot(point - u) * v;
 }
 
 bool Line::isDuplicate(const Line& otherLine) const
 {
-  Point2f n1, n2;
-  float c1, c2;
-  toImplicit(n1, c1);
-  otherLine.toImplicit(n2, c2);
-  float dot = fabs(n1.dot(n2));
-  double dotThreshold = cos(1*CV_PI/180);
-  if ((dot > dotThreshold) && fabs(fabs(c1)-fabs(c2)) < 10)
-  {
+  // Check if (0, 0) is close to both lines. Two lines are close enough
+  // for our applications if their slopes and intercepts are roughly equal
+  auto zero = cv::Point2f(0, 0);
+  double thresh = abs(otherLine.getDistance(zero) - getDistance(zero));
+  if (thresh < PIXEL_EPS && distance(otherLine.v, v) < BIG_EPS) {
     return true;
-  }
-  else
-  {
+  } else {
     return false;
   }
 }
@@ -83,14 +95,12 @@ void Line::toImplicit(cv::Point2f& n, float& c) const
   c = n.dot(u);
 }
 
-
-bool Line::isVertical() const
+// The functions below are for filtering into potential horizontal and vertical court lines
+double Line::getAngle(const Line& otherLine) const
 {
-  Point2f n;
-  float c;
-  toImplicit(n, c);
-
-  return (fabs(atan2(n.y, n.x)) < 65 * CV_PI / 180) || (fabs(atan2(-n.y, -n.x)) < 65 * CV_PI / 180);
+  double angle = abs(atan2(v.y, v.x) - atan2(otherLine.v.y, otherLine.v.x));
+  angle = min(angle, CV_PI - angle);
+  return angle;
 }
 
 bool Line::computeIntersectionPoint(const Line& line, cv::Point2f& intersectionPoint) const
@@ -99,7 +109,7 @@ bool Line::computeIntersectionPoint(const Line& line, cv::Point2f& intersectionP
   Point2f d1 = v;
   Point2f d2 = line.getVector();
   float cross = d1.x * d2.y - d1.y * d2.x;
-  if (abs(cross) < /*EPS*/1e-8)
+  if (abs(cross) < EPS)
     return false;
   double t1 = (x.x * d2.y - x.y * d2.x) / cross;
   intersectionPoint = u + d1 * t1;

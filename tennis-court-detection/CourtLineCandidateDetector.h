@@ -6,6 +6,9 @@
 
 #include "Line.h"
 #include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <queue>
+#include <map>
 
 class CourtLineCandidateDetector
 {
@@ -32,14 +35,14 @@ public:
 private:
   std::vector<Line> extractLines(const cv::Mat& binaryImage, const cv::Mat& rgbImage);
 
-  void refineLineParameters(std::vector<Line>& lines, const cv::Mat& binaryImage,
+  void refineLineParameters(std::vector<Line>& lines, const std::vector<std::pair<int, int>>& whitePixels,
     const cv::Mat& rgbImage);
 
   void removeDuplicateLines(std::vector<Line>& lines, const cv::Mat& rgbImage);
 
-  Line getRefinedParameters(Line line, const cv::Mat& binaryImage, const cv::Mat& rgbImage);
+  Line getRefinedParameters(Line line, const std::vector<std::pair<int, int>>& whitePixels, const cv::Mat& rgbImage);
 
-  cv::Mat getClosePointsMatrix(Line line, const cv::Mat& binaryImage, const cv::Mat& rgbImage);
+  cv::Mat getClosePointsMatrix(Line line, const std::vector<std::pair<int, int>>& whitePixels, const cv::Mat& rgbImage);
 
   Parameters parameters;
 

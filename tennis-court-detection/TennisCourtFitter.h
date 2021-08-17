@@ -27,16 +27,17 @@ public:
 
 private:
   void getHorizontalAndVerticalLines(const std::vector<Line>& lines, std::vector<Line>& hLines,
-    std::vector<Line>& vLines, const cv::Mat& rgbImage);
+    std::vector<Line>& vLines, const cv::Mat& rgbImage, int mode=1);
 
   void sortHorizontalLines(std::vector<Line>& hLines, const cv::Mat& rgbImage);
 
   void sortVerticalLines(std::vector<Line>& vLines, const cv::Mat& rgbImage);
 
-  void findBestModelFit(const cv::Mat& binaryImage, const cv::Mat& rgbImage);
+  void findBestModelFit(std::vector<Line>& hLines, std::vector<Line>& vLines, const cv::Mat& binaryImage, const cv::Mat& rgbImage);
 
   Parameters parameters;
   std::vector<LinePair> hLinePairs;
   std::vector<LinePair> vLinePairs;
   TennisCourtModel bestModel;
+  float bestScore;
 };

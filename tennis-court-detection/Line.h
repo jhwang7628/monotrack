@@ -10,6 +10,8 @@
 class Line
 {
 public:
+  Line();
+  
   Line(cv::Point2f point, cv::Point2f vector);
 
   static Line fromRhoTheta(float rho, float theta);
@@ -24,17 +26,20 @@ public:
 
   float getDistance(const cv::Point2f& point) const;
 
+  float getPerpendicularDistance(const cv::Point2f& point) const;
+
   bool isDuplicate(const Line& otherLine) const;
 
   void toImplicit(cv::Point2f& n, float& c) const;
 
-  bool isVertical() const;
-
-private:
+  double getAngle(const Line& otherLine) const;
 
   cv::Point2f getPointOnLineClosestTo(const cv::Point2f point) const;
 
-
   cv::Point2f u; // point on line
   cv::Point2f v; // collinear vector
+
+  constexpr static double EPS = 1e-5;
+  constexpr static double BIG_EPS = 1e-2;
+  constexpr static double PIXEL_EPS = 10;
 };

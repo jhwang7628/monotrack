@@ -31,8 +31,8 @@ private:
 
   float evaluateModel(const std::vector<cv::Point2f>& courtPoints, const cv::Mat& binaryImage);
 
-  float computeScoreForLineSegment(const cv::Point2f& start, const cv::Point2f& end,
-    const cv::Mat& binaryImage);
+  float computeScoreForLineSegment(cv::Point2f start, cv::Point2f end,
+    const cv::Mat& binaryImage, double weight);
 
   bool isInsideTheImage(float x, float y, const cv::Mat& image);
 

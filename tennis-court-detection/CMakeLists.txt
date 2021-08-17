@@ -1,7 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
 project(detect)
 
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE Release)
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+add_compile_options(
+    -Wall
+    -Wextra
+    -O3
+    -DNDEBUG
+)
 
 # Fetch opencv from source
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/external" CACHE PATH "Directory under which to collect all populated content")
