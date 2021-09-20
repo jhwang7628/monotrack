@@ -22,48 +22,58 @@ def annotate_video(cap,
                    is_hit=None,
                    frame_limit=None,
                    outfile='./output/output.mp4'):
+    
     try:
-        os.makedirs('output')
+        os.makedirs(os.path.dirname(outfile))
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
             
     width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))   # float `width`
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  # float `height`
-    Xb, Yb = trajectory.X, trajectory.Y
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    if trajectory is not None:
+        Xb, Yb = trajectory.X, trajectory.Y
     # Write the hits to video, draw a dot right as the shuttle is struck
-    outvid = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc('M','P','4','V'), 10, (width, height))
+    outvid = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc('m','p','4','v'), fps, (width, height))
 
-    court_img = cv2.imread('court.jpg')
+    court_img = cv2.imread('/home/code-base/user_space/ai-badminton/python/ai-badminton/src/ai_badminton/court.jpg')
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     duration = 3
     bid = 0
-    import tqdm.notebook as tq
+    import tqdm.auto as tq
 
-    L = frame_limit
+    L = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_limit:
+        L = frame_limit
     if not frame_limit:
-        L = min(poses[0].values.shape[0], len(Xb))
+        if poses is not None:
+            L = min(L, poses[0].values.shape[0])
+        if trajectory is not None:
+            L = min(L, len(Xb))
         
     for i in tq.tqdm(range(L)):
         ret, frame = cap.read()
         frame = court.draw_lines(frame)
-        player_poses = []
-        for j in range(2):
-            xy = poses[j].iloc[i].to_list()
-            pose = Pose()
-            pose.init_from_kparray(xy)
-            player_poses.append(pose)
-            frame = pose.draw_skeleton(frame, colour=(128, 128 + j * 127, 128))
+        if poses is not None:
+            player_poses = []
+            for j in range(2):
+                xy = poses[j].iloc[i].to_list()
+                pose = Pose()
+                pose.init_from_kparray(xy)
+                player_poses.append(pose)
+                frame = pose.draw_skeleton(frame, colour=(128, 128 + j * 127, 128))
 
-        centre = (int(Xb[i]), int(Yb[i]))
-        radius = 5
-        colour = (0, 255, 0)
-        thickness = -1
-        frame = cv2.circle(frame, centre, radius, colour, thickness)
+        if trajectory is not None:
+            centre = (int(Xb[i]), int(Yb[i]))
+            radius = 5
+            colour = (0, 255, 0)
+            thickness = -1
+            frame = cv2.circle(frame, centre, radius, colour, thickness)
 
         if result:
             if bid < len(result) and abs(result[bid] - i) < duration:
-                radius = 7
+                radius = 4
                 colour = (255, 0, 0)
                 frame = cv2.circle(frame, centre, radius, colour, thickness)
 
@@ -72,26 +82,25 @@ def annotate_video(cap,
                     if is_hit[bid]:
                         pid = is_hit[bid] - 1
                         # Use the athlete's feet position as where its hit
-                        # Find the foot closer to the shuttle
                         cp = np.array([Xb[i], Yb[i]])
                         lp, rp = player_poses[pid].kp[15], player_poses[pid].kp[16]
-                        if np.linalg.norm(cp - lp) < np.linalg.norm(cp - rp):
-                            hit_pos = court.pixel_to_court(lp)
-                        else:
-                            hit_pos = court.pixel_to_court(rp)
+                        # Find point on segment closest to the hit point
+                        du, dv = lp - cp, rp - lp
+                        opt = - np.dot(du, dv) / np.dot(dv, dv)
+                        opt = min(1, max(0, opt))
+                        proj = (1 - opt) * lp + opt * rp
+                        hit_pos = court.pixel_to_court(proj)
+                        
                         colour = (255,0,0)
-                        draw_hit = True
-
-                        if min(hit_pos) < 0 or max(hit_pos) > 1:
-                            draw_hit = False
                     else:
                         # Assume it hit the ground
                         hit_pos = court.pixel_to_court(centre)
                         colour = (0,0,255)
-                        if min(hit_pos) < 0 or max(hit_pos) > 1:
-                            draw_hit = False
-                    if draw_hit:
-                        court_img = court.draw_hit(court_img, hit_pos, colour)
+                    
+                    print(hit_pos)
+                    hit_pos[hit_pos < 0] = 0
+                    hit_pos[hit_pos > 1] = 1
+                    court_img = court.draw_hit(court_img, hit_pos, colour)
 
                 if i == result[bid] + duration - 1:
                     bid += 1

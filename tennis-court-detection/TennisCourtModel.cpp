@@ -170,11 +170,14 @@ TennisCourtModel::TennisCourtModel(const TennisCourtModel& o)
   vLinePairs = o.vLinePairs;
   hLines = o.hLines;
   vLines = o.vLines;
+  netPoints = o.netPoints;
 }
 
 TennisCourtModel& TennisCourtModel::operator=(const TennisCourtModel& o)
 {
+  assert(o.netPoints.size() == 2);
   transformationMatrix = o.transformationMatrix;
+  netPoints = o.netPoints;
   return *this;
 }
 
@@ -227,6 +230,103 @@ float TennisCourtModel::fit(const LinePair& hLinePair, const LinePair& vLinePair
   return bestScore;
 }
 
+float TennisCourtModel::fitNet(const std::vector<Line>& lines, const cv::Mat& binaryImage, 
+  const cv::Mat& rgbImage) {
+  // Filter the lines for candidates
+  std::vector<Line> filteredLines;
+  
+  std::vector<Point2f> transformedModelPoints(courtPoints.size());
+  perspectiveTransform(courtPoints, transformedModelPoints, transformationMatrix);
+  Line middleLine = Line::fromTwoPoints(transformedModelPoints[14], transformedModelPoints[15]);
+  
+  int linePairs[7][2] = {
+    //{0, 3}, {1, 2}, 
+    {8, 9}, {10, 11}, {16, 17}, {18, 19}, {14, 15}
+  };
+  std::vector<Line> excludedLines;
+  for (int i = 0; i < 7; i++) {
+    auto line = Line::fromTwoPoints(transformedModelPoints[linePairs[i][0]], transformedModelPoints[linePairs[i][1]]);
+    excludedLines.push_back(line);
+  }
+
+  int courtPairs[12][2] = {
+    {0, 1}, {1, 2}, {2, 3}, {3, 0},
+    {4, 5}, {6, 7}, {8, 9}, {10, 11},
+    {12, 20}, {13, 21}, {16, 17}, {18, 19}
+  };
+
+  // Remove pixels from lines that are part of the court
+  cv::Mat filteredBinaryImage = binaryImage.clone();
+  for (int i = 0; i < 12; i++) {
+    removeLineSegment(
+      transformedModelPoints[courtPairs[i][0]], 
+      transformedModelPoints[courtPairs[i][1]],
+      filteredBinaryImage
+    );
+  }
+
+
+  for (const auto& line : lines) {
+    if (middleLine.isParallel(line, 0.2)) {
+      bool excluded = false;
+      for (const auto& exclLine : excludedLines) {
+        if (exclLine.isDuplicate(line)) {
+          excluded = true;
+          break;
+        }
+      }
+
+      // Check if this line is sufficiently above the middle line
+      double xmid = (transformedModelPoints[14].x + transformedModelPoints[15].x) / 2.;
+      // Bound net between 5% and and 40% of the screen 
+      double pixThreshLow = 0.05 * binaryImage.rows, pixThreshHigh = 0.4 * binaryImage.rows;
+      if (!excluded && line.evaluateByX(xmid) < middleLine.evaluateByX(xmid) - pixThreshLow &&
+          line.evaluateByX(xmid) > middleLine.evaluateByX(xmid) - pixThreshHigh) {
+        filteredLines.push_back(line);
+      }
+    }
+  }
+
+  if (filteredLines.size() == 0) {
+    return GlobalParameters().initialFitScore;
+  }
+
+  Line bestLine;
+  float bestScore = GlobalParameters().initialFitScore;
+
+  for (const auto& line : filteredLines) {
+    auto leftPost = line.getPointOnLineClosestTo(transformedModelPoints[14]);
+    auto rightPost = line.getPointOnLineClosestTo(transformedModelPoints[15]);
+    float length = computeRasterizedSegmentLength(leftPost, rightPost, filteredBinaryImage);
+
+    // If less than half the net is in the frame, this is probably wrong
+    if (length < 0.5 * distance(leftPost, rightPost)) {
+      continue;
+    }
+
+    // It should not be too short
+    if (distance(leftPost, transformedModelPoints[14]) > length * 0.33 ||
+        distance(rightPost, transformedModelPoints[15]) > length * 0.33) {
+      continue;
+    }
+
+    // It should not be too short either
+    if (distance(leftPost, transformedModelPoints[14]) < length * 0.1 ||
+        distance(rightPost, transformedModelPoints[15]) < length * 0.1) {
+      continue;
+    }
+
+    double w_net = 4;
+    float score = computeScoreForLineSegment(leftPost, rightPost, binaryImage, w_net);
+    if (score > bestScore) {
+      bestScore = score;
+      bestLine = line;
+      netPoints = std::vector<cv::Point2f>({leftPost, rightPost});
+    }
+  }
+
+  return bestScore;
+}
 
 std::vector<cv::Point2f> TennisCourtModel::getIntersectionPoints(const LinePair& hLinePair,
   const LinePair& vLinePair)
@@ -304,6 +404,14 @@ void TennisCourtModel::drawModel(std::vector<Point2f>& courtPoints, Mat& image, 
   // Back doubles service lines
   drawLine(courtPoints[16], courtPoints[17], image, color);
   drawLine(courtPoints[18], courtPoints[19], image, color);
+
+  // The net
+  if (netPoints.size()) {
+    drawLine(netPoints[0], netPoints[1], image, Scalar(0, 255, 0));
+    drawLine(courtPoints[14], netPoints[0], image, Scalar(0, 255, 0));
+    drawLine(courtPoints[15], netPoints[1], image, Scalar(0, 255, 0));
+    // drawLine(courtPoints[14], courtPoints[15], image, Scalar(0, 255, 0));
+  }
 }
 
 
@@ -408,13 +516,7 @@ float TennisCourtModel::evaluateModel(const std::vector<cv::Point2f>& courtPoint
   return score;
 }
 
-float TennisCourtModel::computeScoreForLineSegment(cv::Point2f start, cv::Point2f end,
-  const cv::Mat& binaryImage, double weight)
-{
-  float score = 0;
-  float fgScore = 1;
-  float bgScore = -0.5;
-
+bool TennisCourtModel::pruneStartEnd(cv::Point2f& start, cv::Point2f& end, const cv::Mat& binaryImage) {
   // Reset start and end to intersections
   if (start.x > end.x) {
     swap(start, end);
@@ -433,13 +535,13 @@ float TennisCourtModel::computeScoreForLineSegment(cv::Point2f start, cv::Point2
 
   if (start.y < 0 && abs(dir.y) > Line::EPS) {
     double t = -start.y / dir.y;
-    if (t < 0) return 0;
+    if (t < 0) return false;
     start = start + t * dir;
   }
 
   if (start.y >= binaryImage.rows - 1 && abs(dir.y) > Line::EPS) {
     double t = (binaryImage.rows - 1 - start.y) / dir.y;
-    if (t < 0) return 0;
+    if (t < 0) return false;
     start = start + t * dir;
   }
 
@@ -450,21 +552,34 @@ float TennisCourtModel::computeScoreForLineSegment(cv::Point2f start, cv::Point2
 
   if (end.y >= binaryImage.rows - 1 && abs(dir.y) > Line::EPS) {
     double t = (binaryImage.rows - 1 - end.y) / dir.y;
-    if (t > 0) return 0;
+    if (t > 0) return false;
     end = end + t * dir;
   }
 
   if (end.y < 0 && abs(dir.y) > Line::EPS) {
     double t = -end.y / dir.y;
-    if (t > 0) return 0;
+    if (t > 0) return false;
     end = end + t * dir;
   }
 
-  if (start.x > end.x) return 0;
+  if (start.x > end.x) return false;
+  int length = int(distance(start, end));
+  if (length == 0) return false;
+
+  return true;
+}
+
+float TennisCourtModel::computeScoreForLineSegment(cv::Point2f start, cv::Point2f end,
+  const cv::Mat& binaryImage, double weight)
+{
+  float score = 0;
+  float fgScore = 1;
+  float bgScore = -0.5;
+
+  if (!pruneStartEnd(start, end, binaryImage))
+    return 0;
 
   int length = int(distance(start, end));
-  if (length == 0) return 0;
-
   Point2f vec = normalize(end-start);
 
   for (int i = 0; i < length; i++)
@@ -481,8 +596,55 @@ float TennisCourtModel::computeScoreForLineSegment(cv::Point2f start, cv::Point2
     {
       score += bgScore / weight;
     }
+
+    /*
+    // TODO: Add some width to the scoring function smartly
+    // to make score function take in a line with thickness
+    int dx[] = {0, 1, 0, -1, 0};
+    int dy[] = {1, 0, -1, 0, 0};
+    for (int j = 0; j < 5; j++) {
+      if (!isInsideTheImage(y+dy[j],x+dx[j], binaryImage))
+        continue;
+      uchar imageValue = binaryImage.at<uchar>(y+dy[j],x+dx[j]);
+      if (imageValue == GlobalParameters().fgValue)
+      {
+        score += fgScore;
+      }
+      else
+      {
+        score += bgScore / weight;
+      }
+    }
+    */
   }
   return weight * score;
+}
+
+void TennisCourtModel::removeLineSegment(cv::Point2f start, cv::Point2f end,
+  cv::Mat& binaryImage)
+{
+  if (!pruneStartEnd(start, end, binaryImage))
+    return;
+
+  int length = int(distance(start, end));
+  Point2f vec = normalize(end-start);
+
+  for (int i = 0; i < length; i++)
+  {
+    Point2f p = start + i*vec;
+    int x = round(p.x);
+    int y = round(p.y);
+    binaryImage.at<uchar>(y,x) = 0;
+  }
+}
+
+float TennisCourtModel::computeRasterizedSegmentLength(cv::Point2f start, cv::Point2f end,
+  const cv::Mat& binaryImage)
+{
+  if (!pruneStartEnd(start, end, binaryImage))
+    return 0;
+
+  return distance(start, end);
 }
 
 
@@ -501,8 +663,14 @@ void TennisCourtModel::writeToFile(const std::string& filename)
   {
     throw std::runtime_error("Unable to open file: " + filename);
   }
-  for (auto& point: transformedModelPoints)
-  {
+
+  // Write the four corners plus the two net poles
+  for (int i = 0; i < 4; i++) {
+    auto point = transformedModelPoints[i];
+    outFile << point.x << ";" << point.y << std::endl;
+  }
+  for (int i = 0; i < 2; i++) {
+    auto point = netPoints[i];
     outFile << point.x << ";" << point.y << std::endl;
   }
 }

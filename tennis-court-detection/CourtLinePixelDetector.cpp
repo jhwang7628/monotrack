@@ -19,7 +19,7 @@ CourtLinePixelDetector::Parameters::Parameters()
   diffThreshold = 20;
   t = 4;
   gradientKernelSize = 3;
-  kernelSize = 41;
+  kernelSize = 21;
 }
 
 CourtLinePixelDetector::CourtLinePixelDetector()

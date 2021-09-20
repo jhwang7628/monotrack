@@ -1,4 +1,4 @@
-_BASE_: "../../../detectron2/configs/COCO-PanopticSegmentation/Base-Panoptic-FPN.yaml"
+_BASE_: "/home/code-base/user_space/detectron2/configs/COCO-PanopticSegmentation/Base-Panoptic-FPN.yaml"
 MODEL:
   WEIGHTS: "detectron2://COCO-PanopticSegmentation/panoptic_fpn_R_50_3x/139514569/model_final_c10459.pkl"
   RESNETS:

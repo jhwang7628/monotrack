@@ -40,23 +40,21 @@ TennisCourtModel TennisCourtFitter::run(const std::vector<Line>& lines, const Ma
   bestScore = GlobalParameters().initialFitScore;
 
   TimeMeasurement::start("\tfindBestModelFit (optimization mode)");
-  std::vector<Line> hLines, vLines;
-  getHorizontalAndVerticalLines(lines, hLines, vLines, rgbImage, 1);
-  findBestModelFit(hLines, vLines, binaryImage, rgbImage);
+  findBestModelFit(lines, binaryImage, rgbImage, 1);
   std::cerr << "Current best model score: " << bestScore << std::endl;
   TimeMeasurement::stop("\tfindBestModelFit (optimization mode)");
 
-  const int minThresh = 1600, goodThresh = 2100;
+  const int minThresh = 2 * 1600, goodThresh = 2 * 2100;
   if (bestScore < minThresh) {
     std::cout << "Fit scores in default-mode too low. Trying more time-intensive computations..." << std::endl;
     TimeMeasurement::start("\tfindBestModelFit (random mode)");
     const int trials = 24;
     for (int t = 0; t < trials; t++) {
-      std::vector<Line> hLines, vLines;
-      getHorizontalAndVerticalLines(lines, hLines, vLines, rgbImage, 0);
-      findBestModelFit(hLines, vLines, binaryImage, rgbImage);
-      std::cerr << "Iteration " << t << ", current best model score: " 
-                << bestScore << std::endl;
+      findBestModelFit(lines, binaryImage, rgbImage, 0);
+      if (t % 5 == 0) {
+        std::cerr << "Iteration " << t << ", current best model score: " 
+                  << bestScore << std::endl;
+      }
       if (bestScore >= goodThresh) {
         break;
       }
@@ -229,80 +227,61 @@ void TennisCourtFitter::sortVerticalLines(std::vector<Line>& vLines, const cv::M
 }
 
 
-void TennisCourtFitter::findBestModelFit(std::vector<Line>& hLines, std::vector<Line>& vLines, const cv::Mat& binaryImage, const cv::Mat& rgbImage)
+void TennisCourtFitter::findBestModelFit(const std::vector<Line>& lines, const cv::Mat& binaryImage, const cv::Mat& rgbImage, int mode)
 {
-  sortHorizontalLines(hLines, rgbImage);
-  sortVerticalLines(vLines, rgbImage);
+  std::vector<Line> hLines, vLines;
+  getHorizontalAndVerticalLines(lines, hLines, vLines, rgbImage, mode);
 
-  hLinePairs = TennisCourtModel::getPossibleLinePairs(hLines);
-  vLinePairs = TennisCourtModel::getPossibleLinePairs(vLines);
-
-  if (debug)
-  {
-    std::cout << "Horizontal line pairs = " << hLinePairs.size() << std::endl;
-    std::cout << "Vertical line pairs = " << vLinePairs.size() << std::endl;
-  }
-
-  if (hLinePairs.empty() || vLinePairs.empty())
-  {
-    throw std::runtime_error("Not enough line candidates were found.");
-  }
-
-  for (auto& hLinePair: hLinePairs)
-  {
-    for (auto& vLinePair: vLinePairs)
-    {
-      TennisCourtModel model;
-      float score = model.fit(hLinePair, vLinePair, binaryImage, rgbImage);
-      
-      if (score > bestScore)
-      {
-        bestScore = score;
-        bestModel = model;
-        if (debug) {
-          Mat image = rgbImage.clone();
-          drawLine(hLinePair.first, image, Scalar(255, 0, 0));
-          drawLine(hLinePair.second, image, Scalar(255, 0, 0));
-          drawLine(vLinePair.first, image, Scalar(255, 0, 0));
-          drawLine(vLinePair.second, image, Scalar(255, 0, 0));
-          displayImage(windowName, image);
-
-          bestModel.drawModel(image);
-          displayImage(windowName, image);
-        }
-      }
+  for (int flip = 0; flip < 2; flip++) {
+    if (flip) {
+      hLines.swap(vLines);
     }
-  }
 
-  // Theres a possibility our partitioning went the wrong way
-  hLines.swap(vLines);
-  sortHorizontalLines(hLines, rgbImage);
-  sortVerticalLines(vLines, rgbImage);
+    sortHorizontalLines(hLines, rgbImage);
+    sortVerticalLines(vLines, rgbImage);
 
-  hLinePairs = TennisCourtModel::getPossibleLinePairs(hLines);
-  vLinePairs = TennisCourtModel::getPossibleLinePairs(vLines);
+    hLinePairs = TennisCourtModel::getPossibleLinePairs(hLines);
+    vLinePairs = TennisCourtModel::getPossibleLinePairs(vLines);
 
-  for (auto& hLinePair: hLinePairs)
-  {
-    for (auto& vLinePair: vLinePairs)
+    if (debug)
     {
-      TennisCourtModel model;
-      float score = model.fit(hLinePair, vLinePair, binaryImage, rgbImage);
-      if (score > bestScore)
-      {
-        bestScore = score;
-        bestModel = model;
-        if (debug) {
-          std::cerr << "Got a better pair of lines, new score " << score << std::endl;
-          Mat image = rgbImage.clone();
-          drawLine(hLinePair.first, image, Scalar(255, 0, 0));
-          drawLine(hLinePair.second, image, Scalar(255, 0, 0));
-          drawLine(vLinePair.first, image, Scalar(255, 0, 0));
-          drawLine(vLinePair.second, image, Scalar(255, 0, 0));
-          displayImage(windowName, image);
+      std::cout << "Horizontal line pairs = " << hLinePairs.size() << std::endl;
+      std::cout << "Vertical line pairs = " << vLinePairs.size() << std::endl;
+    }
 
-          bestModel.drawModel(image);
-          displayImage(windowName, image);
+    if (hLinePairs.empty() || vLinePairs.empty())
+    {
+      throw std::runtime_error("Not enough line candidates were found.");
+    }
+
+    for (auto& hLinePair: hLinePairs)
+    {
+      for (auto& vLinePair: vLinePairs)
+      {
+        TennisCourtModel model;
+        float score = model.fit(hLinePair, vLinePair, binaryImage, rgbImage);
+        float netScore = 0;
+        if (score > GlobalParameters().initialFitScore) {
+          netScore = model.fitNet(lines, binaryImage, rgbImage);
+        }
+        
+        // TODO: Figure out how to score the white pixels of the net
+        if (score + 1e-2 * netScore > bestScore)
+        {
+          bestScore = score + 1e-2 * netScore;
+          bestModel = model;
+          std::cerr << "Score breakdown: " << score << " " << netScore << std::endl;
+          if (debug) {
+            Mat image = rgbImage.clone();
+            drawLine(hLinePair.first, image, Scalar(255, 0, 0));
+            drawLine(hLinePair.second, image, Scalar(255, 0, 0));
+            drawLine(vLinePair.first, image, Scalar(255, 0, 0));
+            drawLine(vLinePair.second, image, Scalar(255, 0, 0));
+            displayImage(windowName, image);
+
+            bestModel.drawModel(image);
+            displayImage(windowName, image);
+          }
         }
       }
     }

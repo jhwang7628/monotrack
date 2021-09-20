@@ -15,7 +15,7 @@ def generate_sequence(court, traj, poses, hits):
     def get_position(pose, x, y):
         cp = np.array([x, y])
         lp, rp = pose.kp[15], pose.kp[16]
-        if np.linalg.norm(cp - lp) < np.linalg.norm(cp - rp):
+        if abs(cp[0] - lp[0]) < abs(cp[0] - rp[0]):
             hit_pos = court.pixel_to_court(lp)
         else:
             hit_pos = court.pixel_to_court(rp)

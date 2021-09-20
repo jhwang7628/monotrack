@@ -33,7 +33,7 @@ private:
 
   void sortVerticalLines(std::vector<Line>& vLines, const cv::Mat& rgbImage);
 
-  void findBestModelFit(std::vector<Line>& hLines, std::vector<Line>& vLines, const cv::Mat& binaryImage, const cv::Mat& rgbImage);
+  void findBestModelFit(const std::vector<Line>& lines, const cv::Mat& binaryImage, const cv::Mat& rgbImage, int mode);
 
   Parameters parameters;
   std::vector<LinePair> hLinePairs;

@@ -1,4 +1,4 @@
-_BASE_: "../../../detectron2/configs/Base-RetinaNet.yaml"
+_BASE_: "/home/code-base/user_space/detectron2/configs/Base-RetinaNet.yaml"
 MODEL:
   WEIGHTS: "detectron2://COCO-Detection/retinanet_R_50_FPN_3x/137849486/model_final_4cafe0.pkl"
   RESNETS:
