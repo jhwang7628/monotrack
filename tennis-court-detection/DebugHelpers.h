@@ -11,6 +11,8 @@ void printVideoInfo(const cv::VideoCapture vc);
 
 void displayImage(const std::string& windowName, const cv::Mat& image, int delay=0);
 
+void writeImage(const std::string& imageName, const cv::Mat& image);
+
 void drawLines(std::vector<Line>& lines, cv::Mat& image, cv::Scalar color=cv::Scalar(0,0,255), int thickness=2);
 
 void drawLine(const Line& line, cv::Mat& image, cv::Scalar color=cv::Scalar(0,0,255), int thickness=2);
