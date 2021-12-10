@@ -131,9 +131,11 @@ count = 0
 
 print('About to begin prediction...')
 
+total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+from tqdm import tqdm
+pbar = tqdm(total=total)
+
 while success:
-	if count % 10 == 0:
-		print("Frame #%d" % count)
 	unit = []
 	#Adjust BGR format (cv2) to RGB format (PIL)
 	x1 = image1[...,::-1]
@@ -209,6 +211,9 @@ while success:
 	frame_time2 = custom_time(cap.get(cv2.CAP_PROP_POS_MSEC))
 	success, image3 = cap.read()
 	frame_time3 = custom_time(cap.get(cv2.CAP_PROP_POS_MSEC))
+	pbar.n = count
+	pbar.last_print_n = count
+	pbar.refresh()
 
 f.close()
 out.release()

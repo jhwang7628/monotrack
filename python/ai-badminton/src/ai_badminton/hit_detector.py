@@ -1,6 +1,10 @@
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from tensorflow.python.keras.saving import hdf5_format
+import h5py
+from tensorflow.keras import backend as K
+
 from .pose import Pose
 
 class HitDetector(object):
@@ -91,12 +95,28 @@ class AdhocHitDetector(HitDetector):
         plt.hist(np.diff(result))
         print('Average time between shots (s):', np.average(np.diff(result)) / fps)
         return result, is_hit
+       
+def scale_by_col(x, cols):
+    x_ = x[:, cols]
+    m, M = np.min(x_[x_ != 0]), np.max(x_[x_ != 0])
+    x_[x_ != 0] = (x_[x_ != 0] - m) / (M - m) + 1
+    x[:, cols] = x_
+    return x
+
+def scale_data(x):
+    even_cols = [2*i for i in range(x.shape[1] // 2)]
+    odd_cols = [2*i+1 for i in range(x.shape[1] // 2)]
+    x = scale_by_col(x, even_cols)
+    x = scale_by_col(x, odd_cols)
+    return x
 
 class MLHitDetector(HitDetector):
-    def __init__(self, court, poses, trajectory, model_file):
+    def __init__(self, court, poses, trajectory, model_path):
         super().__init__(court, poses, trajectory)
     
-        self.model = tf.keras.models.load_model(model_file)
+        with h5py.File(model_path, mode='r') as f:
+            self.temperature = f.attrs['temperature']
+            self.model = hdf5_format.load_model_from_hdf5(f)
         
         import tensorflow.keras.backend as K
 
@@ -107,7 +127,7 @@ class MLHitDetector(HitDetector):
         print('Total params: %d' % (trainable_count + non_trainable_count))
         print('Trainable params: %d' % trainable_count)
         print('Non-trainable params: %d' % non_trainable_count)
-        
+
     def detect_hits(self, fps=25):
         Xb, Yb = self.trajectory.X, self.trajectory.Y
         num_consec = int(self.model.input_shape[1] // (2 * (34 + 4 + 1)))
@@ -129,33 +149,36 @@ class MLHitDetector(HitDetector):
             
             x_list.append(x)
         x_inp = np.hstack(x_list)
+        x_inp = scale_data(x_inp)        
         
-        y_pred = self.model.predict(x_inp)
+        compute_logits = K.function([self.model.layers[0].input], [self.model.layers[-2].output])
+        y_pred = tf.nn.softmax(compute_logits(x_inp)[0] / self.temperature).numpy()
         
-        detections = np.where(y_pred[:,0] < 0.05)[0]
+        detections = np.where(y_pred[:,0] < 0.1)[0]
         result, clusters, who_hit = [], [], []
         min_x, max_x = np.min(court_pts, axis=0)[0], np.max(court_pts, axis=0)[0]
         for t in detections:
             # Filter based on time
-            if len(clusters) == 0 or clusters[-1][0] < t - fps / 2.5:
+            if len(clusters) == 0 or clusters[-1][0] < t - fps / 2:
                 clusters.append([t])
             else:
                 clusters[-1].append(t)
+
+        print('Sum of predicted scores:', np.sum(y_pred, axis=0))
 
         delta = 0.1 * (max_x - min_x)
         for cluster in clusters:
             # Filter based on whether any part of the cluster is outside
             any_out = False
-            votes = np.array([0., 0., 0.])
+            votes = np.array([0.] * y_pred.shape[1])
             for t in cluster:
                 if Xb[t] < min_x + delta or Xb[t] > max_x - delta:
                     any_out = True
                     break
                 votes += y_pred[t]
             if not any_out:
-                votes[0] = 0
-                votes[1] /= 3
-                result.append(int(np.median(cluster)))
+                # Detections start around 6 frames from the end
+                result.append(int(np.median(cluster) + num_consec - 6))
                 who_hit.append(int(np.argmax(votes)))
 
         is_hit = []
@@ -180,7 +203,9 @@ class MLHitDetector(HitDetector):
             
         result = [r for i, r in enumerate(result) if not to_delete[i]]
         
-        print('Total shots hit by players:', sum(x > 0 for x in is_hit))
+        num_hits = sum(x > 0 for x in is_hit)
+        print('Total shots hit by players:', )
+        print('Percentage of shots hit by player 1:', sum(x == 1 for x in is_hit) / num_hits)
         print('Total impacts detected:', len(result))
         print('Distribution of shot times:')
         plt.hist(np.diff(result))

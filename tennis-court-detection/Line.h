@@ -28,7 +28,11 @@ public:
 
   float getPerpendicularDistance(const cv::Point2f& point) const;
 
+  float evaluateByX(float x) const;
+  
   bool isDuplicate(const Line& otherLine) const;
+
+  bool isParallel(const Line& otherLine, double tol = BIG_EPS) const;
 
   void toImplicit(cv::Point2f& n, float& c) const;
 

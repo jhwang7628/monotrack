@@ -29,7 +29,7 @@ AE/AF = 2.5/15.5
 AF/AG = 15.5/44
 '''
 class Court:
-    eps = 0.01
+    eps = 0.05
     
     def __init__(self, corners = None):
         if corners is None:
@@ -88,20 +88,20 @@ class Court:
         x = self.inv_H @ np.array([p[0], p[1], 1])
         return x[:2] / x[2]
     
-    def in_court(self, p):
+    def in_court(self, p, slack=0):
         # 0 if not in court, 1 if in upper half, 2 if in lower half
         x = self.pixel_to_court(p)
-        if not (-self.eps < x[0] < 1 + self.eps):
+        if not (-self.eps - slack[0] < x[0] < 1 + self.eps + slack[0]):
             return 0
-        if not (-self.eps < x[1] < 1 + self.eps):
+        if not (-self.eps - slack[1] < x[1] < 1 + self.eps + slack[1]):
             return 0
         
-        return 1 + (x[1] > 0.5 - self.eps)
+        return 1 + (x[1] > 0.5 + self.eps)
     
     def draw_hit(self, img, pos, colour=(255,0,0)):
         # pos must be a vec in [0,1]^2 representing position on the 2d court
         centre = (int(pos[0] * img.shape[1]), int((1.-pos[1]) * img.shape[0]))
-        radius = 8
+        radius = 4
         thickness = -1
         return cv2.circle(img, centre, radius, colour, thickness)
     

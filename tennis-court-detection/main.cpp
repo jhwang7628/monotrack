@@ -12,7 +12,7 @@ using namespace cv;
 int main(int argc, char** argv)
 {
   TimeMeasurement::debug = true;
-  CourtLinePixelDetector::debug = false;
+  CourtLinePixelDetector::debug = true;
   CourtLineCandidateDetector::debug = false;
   TennisCourtFitter::debug = false;
 

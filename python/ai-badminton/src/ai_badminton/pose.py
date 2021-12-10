@@ -20,14 +20,20 @@ class Pose:
         "left_wrist", "right_wrist", "left_hip", "right_hip", 
         "left_knee", "right_knee", "left_ankle", "right_ankle" ]
     
-    def __init__(self, kplines=[]):
+    def __init__(self, kplines=[], fullPose=False):
         if not kplines:
             return
         
         keypoints = []
-        for line in kplines:
-            i, px, py, score = [float(x) for x in line.split()]
+        self.score = 0
+        for kp, line in enumerate(kplines):
+            if not fullPose:
+                i, px, py, score = [float(x) for x in line.split()]
+            else:
+                px, py, score = [float(x) for x in line.split()]
+                i = kp
             keypoints.append((int(i), np.array([px, py])))
+            self.score += score
         self.init_from_kp(keypoints)
     
     def init_from_kparray(self, kparray):
@@ -56,6 +62,9 @@ class Pose:
             X, Y = self.kp[line[0]], self.kp[line[1]]
             if any(np.isnan(X)) or any(np.isnan(Y)):
                 continue
+            # We sometimes fill in NaNs with zeros
+            if sum(X) == 0 or sum(Y) == 0:
+                continue
             p0, p1 = tuple(X.astype(int)), tuple(Y.astype(int))
             # For the legs, colour them and the ankles separately
             if line == (13, 15) or line == (14, 16):
@@ -67,6 +76,16 @@ class Pose:
     
     def get_base(self):
         # Returns the midpoint of the two ankle positions
+        # Returning one of the two points if theres a NaN
+        # or a zero
+        left_nan = self.kp[15][0] != self.kp[15][0] or self.kp[15][0] == 0
+        right_nan = self.kp[16][0] != self.kp[16][0] or self.kp[16][0] == 0
+        if left_nan:
+            return self.kp[16]
+        elif right_nan:
+            return self.kp[15]
+        elif left_nan and right_nan:
+            return self.get_centroid()
         return (self.kp[15] + self.kp[16]) / 2.
     
     def get_centroid(self):
@@ -92,6 +111,10 @@ def read_player_poses(input_prefix):
     
     bottom_player.drop('frame', axis=1, inplace=True)
     top_player.drop('frame', axis=1, inplace=True)
+    bottom_player.fillna(method='bfill', inplace=True)
+    bottom_player.fillna(method='ffill', inplace=True)
+    top_player.fillna(method='bfill', inplace=True)
+    top_player.fillna(method='ffill', inplace=True)
     bottom_player.fillna(0, inplace=True)
     top_player.fillna(0, inplace=True)
     
@@ -101,9 +124,10 @@ def read_player_poses(input_prefix):
 '''
 Processes the raw text pose output from the pose estimation scripts.
 '''
-def process_pose_file(input_path, output_prefix, court):
+def process_pose_file(input_path, output_prefix, court, fullPose=False):
     poses = open(input_path)
     filtered_poses = defaultdict(dict)
+    pose_scores = defaultdict(dict)
 
     frame_id = -1
     pose_lines = []
@@ -111,10 +135,13 @@ def process_pose_file(input_path, output_prefix, court):
     def filter_pose(fid, kplines):
         if not kplines:
             return
-        pose = Pose(kplines)
-        in_court = court.in_court(pose.get_base())# or court.in_court(pose.get_centroid())
+        pose = Pose(kplines, fullPose=fullPose)
+        in_court = court.in_court(pose.get_base(), slack=[0.05, 0.15])
         if in_court:
-            filtered_poses[fid][in_court] = pose
+            if in_court not in filtered_poses[fid]:
+                filtered_poses[fid][in_court] = pose
+            elif pose.score > filtered_poses[fid][in_court].score:
+                filtered_poses[fid][in_court] = pose
 
     def process_poses(fid, lines):
         if not lines:
@@ -131,7 +158,7 @@ def process_pose_file(input_path, output_prefix, court):
 
     print('Read in files. Processing poses...')
     
-    import tqdm.notebook as tq
+    import tqdm.auto as tq
     lines = poses.readlines()
     for lid in tq.tqdm(range(len(lines))):
         line = lines[lid]
@@ -143,6 +170,7 @@ def process_pose_file(input_path, output_prefix, court):
             pose_lines.append(line)
     
     process_poses(frame_id, pose_lines)
+    frame_id += 1
     
     try:
         os.makedirs('output')
@@ -176,6 +204,7 @@ def process_pose_file(input_path, output_prefix, court):
         player = pd.read_csv(filename)
         player.interpolate(method='slinear', inplace=True)
         player.fillna(method='bfill', inplace=True)
+        player.fillna(method='ffill', inplace=True)
         player.to_csv(filename, index=False)
 
     bottom_player = pd.read_csv(output_prefix + '_player_bottom.csv')

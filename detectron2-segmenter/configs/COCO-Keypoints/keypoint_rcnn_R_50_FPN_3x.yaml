@@ -1,4 +1,4 @@
-_BASE_: "~/detectron2/configs/COCO-Keypoints/Base-Keypoint-RCNN-FPN.yaml"
+_BASE_: "/home/code-base/user_space/detectron2/configs/COCO-Keypoints/Base-Keypoint-RCNN-FPN.yaml"
 INPUT:
     MIN_SIZE_TEST: 600
     MAX_SIZE_TEST: 800

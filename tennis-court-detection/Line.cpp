@@ -89,6 +89,20 @@ bool Line::isDuplicate(const Line& otherLine) const
   }
 }
 
+bool Line::isParallel(const Line& otherLine, double tol) const
+{
+  if (distance(otherLine.v, v) < tol) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+float Line::evaluateByX(float x) const {
+  if (v.x == 0) return INFINITY;
+  return u.y + (x - u.x) * v.y / v.x;
+}
+
 void Line::toImplicit(cv::Point2f& n, float& c) const
 {
   n = perpendicular(v);
