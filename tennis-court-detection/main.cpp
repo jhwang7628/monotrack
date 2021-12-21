@@ -11,8 +11,8 @@ using namespace cv;
 
 int main(int argc, char** argv)
 {
-  TimeMeasurement::debug = true;
-  CourtLinePixelDetector::debug = true;
+  TimeMeasurement::debug = false;
+  CourtLinePixelDetector::debug = false;
   CourtLineCandidateDetector::debug = false;
   TennisCourtFitter::debug = false;
 
