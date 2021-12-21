@@ -17,7 +17,7 @@ args = parser.parse_args()
 
 root = Path(args.dataset_root)
 
-allowed_extensions = [".mp4", ".webm"]
+allowed_extensions = ["mp4", "webm"]
 
 if args.out_dir is not None:
     out_dir = Path(args.out_dir)
@@ -49,31 +49,16 @@ def extract_representative_frame(video_capture):
 
 metadata = {}
 
-file_ids = []
-
-for sports_type_path in sports_type_paths:
-    camera_type_paths = [x for x in sports_type_path.iterdir() if x.is_dir()]
-    sport_key = str(sports_type_path.name)
-    metadata[sport_key] = {}
-    for camera_type_path in camera_type_paths:
-        file_paths = [x for x in camera_type_path.iterdir() if (x.is_file() and x.suffix in
-                                                                allowed_extensions)]
-        camera_key = str(camera_type_path.name)
-        metadata[sport_key][camera_key] = {}
-        for file_path in file_paths:
-            file_ids.append((sport_key, camera_key, file_path.name, file_path))
-            # tracknet stores different rally for the same match. skip here to render one thumbnail
-            # per match
-            if args.tracknet:
-                break
+video_files = []
+for ext in allowed_extensions:
+    video_files.extend(list(root.glob(f"**/*.{ext}")))
 
 duration_all = 0.0
 video_count = 0
 frames = []
 
-for file_id in file_ids:
-    sport_key, camera_key, file_key, file_path = file_id
-    print("file_id = ", file_id)
+for file_path in video_files:
+    print("  ", file_path)
 
     cap = cv2.VideoCapture(str(file_path))
 
@@ -89,7 +74,7 @@ for file_id in file_ids:
     obj["duration"] = duration
     obj["fps"] = fps
 
-    metadata[sport_key][camera_key][file_key] = obj
+    metadata[str(file_path)] = obj
 
     idx, frame = extract_representative_frame(cap)
     obj["representative_frame"] = idx
