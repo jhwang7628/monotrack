@@ -40,7 +40,7 @@ if __name__ == "__main__":
             pass
 
     print(cut_dict)
-    for dirname in ['behind-the-court', 'bleacher', 'side', 'players/kento', 'players/lcw', 'players/lindan']:
+    for dirname in ['behind-the-court', 'bleacher', 'side']:
         print(f'Processing {dirname}...')
         for file in os.listdir(dirname):
             if '.mp4' in file or '.webm' in file:
