@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 
-import json
-import argparse
-from pathlib import Path
+from dataset import *
+from media import *
+
+import cv2
 from imutils import build_montages
 from imutils import paths
 
-import cv2
+import json
+import argparse
+from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument("dataset_root", help="Root path of the dataset")
@@ -17,41 +20,15 @@ args = parser.parse_args()
 
 root = Path(args.dataset_root)
 
-allowed_extensions = ["mp4", "webm"]
-
 if args.out_dir is not None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 else:
     out_dir = None
 
-sports_type_paths = [x for x in root.iterdir() if x.is_dir()]
-
-def get_image_dimension(img):
-    height, width, channels = img.shape
-    return width, height
-
-def get_fps(video_capture):
-    return video_capture.get(cv2.CAP_PROP_FPS)
-
-def get_duration(video_capture):
-    fps = get_fps(video_capture)
-    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    return frame_count / fps
-
-def extract_representative_frame(video_capture):
-    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    idx = frame_count // 2
-    video_capture.set(cv2.CAP_PROP_POS_FRAMES, idx)
-    ret, frame = video_capture.read()
-    assert ret == True
-    return idx, frame
-
 metadata = {}
 
-video_files = []
-for ext in allowed_extensions:
-    video_files.extend(list(root.glob(f"**/*.{ext}")))
+video_files = get_video_paths(root)
 
 duration_all = 0.0
 video_count = 0
