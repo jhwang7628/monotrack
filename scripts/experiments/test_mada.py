@@ -6,7 +6,7 @@ import glob
 import math
 from pathlib import Path
 
-root = Path("/home/juiwang/data/ai-badminton/dataset/mada/1117_mada_test_annotation")
+root = Path("/home/juiwang/data/ai-badminton/dataset/mada/sample_result_20211123")
 image = root / "image"
 video = root / "video"
 outdir = Path("./out")

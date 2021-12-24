@@ -11,10 +11,11 @@ import json
 import argparse
 from pathlib import Path
 
+#  python ~/code/ai-badminton/scripts/dataset/visualize_dataset.py racket_split_resampled --out_dir=./racket_split_resampled/metadata/thumbnails
+
 parser = argparse.ArgumentParser()
 parser.add_argument("dataset_root", help="Root path of the dataset")
-parser.add_argument("--out_dir", help="Output path")
-parser.add_argument("--tracknet", help="Dataset is TrackNet")
+parser.add_argument("--out_dir", help="Output path for the thumbnails and montages")
 
 args = parser.parse_args()
 
@@ -60,17 +61,19 @@ for file_path in video_files:
 
     # save to outdir
     if out_dir:
-        cv2.imwrite(str(out_dir / f"{video_count}.png"), frame)
+        rally_dir = out_dir / "individual_rallies"
+        rally_dir.mkdir(exist_ok=True, parents=True)
+        cv2.imwrite(str(rally_dir / f"{video_count}.png"), frame)
 
     video_count += 1
 
     cap.release()
 
-montages = build_montages(frames, (256, 144), (8,5))
+montages = build_montages(frames, (256, 144), (10,40))
 for idx, montage in enumerate(montages):
     cv2.imshow(f"Montage {idx}", montage)
     if out_dir:
-        cv2.imwrite(str(out_dir / f"montage_{idx}.png"), montage)
+        cv2.imwrite(str(out_dir / f"rally_montage_{idx}.png"), montage)
     cv2.waitKey(0)
 
 metadata["metadata"] = {
