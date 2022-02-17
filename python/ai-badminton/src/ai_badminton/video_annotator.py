@@ -4,6 +4,7 @@ import errno
 import cv2
 import numpy as np
 from .pose import Pose
+from .rally_reconstructor import *
 
 '''
 TODO: Figure out a clean way to encapsulate result, frame_lim, and is_hit.
@@ -79,15 +80,18 @@ def annotate_video(cap,
 
                 if i == result[bid]:
                     draw_hit = False
-                    if is_hit[bid]:
+                    if 1 <= is_hit[bid] <= 2:
                         pid = is_hit[bid] - 1
                         # Use the athlete's feet position as where its hit
                         cp = np.array([Xb[i], Yb[i]])
                         lp, rp = player_poses[pid].kp[15], player_poses[pid].kp[16]
                         # Find point on segment closest to the hit point
                         du, dv = lp - cp, rp - lp
-                        opt = - np.dot(du, dv) / np.dot(dv, dv)
-                        opt = min(1, max(0, opt))
+                        if np.dot(dv, dv) < 1e-2:
+                            opt = 0.5
+                        else:
+                            opt = - np.dot(du, dv) / np.dot(dv, dv)
+                            opt = min(1, max(0, opt))
                         proj = (1 - opt) * lp + opt * rp
                         hit_pos = court.pixel_to_court(proj)
                         
@@ -97,7 +101,6 @@ def annotate_video(cap,
                         hit_pos = court.pixel_to_court(centre)
                         colour = (0,0,255)
                     
-                    print(hit_pos)
                     hit_pos[hit_pos < 0] = 0
                     hit_pos[hit_pos > 1] = 1
                     court_img = court.draw_hit(court_img, hit_pos, colour)
@@ -106,5 +109,47 @@ def annotate_video(cap,
                     bid += 1
 
             frame[-court_img.shape[0]:, -court_img.shape[1]:] = court_img        
+        outvid.write(frame)
+    outvid.release()
+    
+'''
+Annotatation for 3d reconstruction. Reprojects 3d trajectory back onto video.
+'''
+def annotate_video_3d(cap, 
+                      court3d, 
+                      trajectory3d,
+                      frame_limit=None,
+                      outfile='./output/output.mp4'):
+    
+    try:
+        os.makedirs(os.path.dirname(outfile))
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+            
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))   # float `width`
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))  # float `height`
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    
+    # Write the hits to video, draw a dot right as the shuttle is struck
+    outvid = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc('m','p','4','v'), fps, (width, height))
+
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    import tqdm.auto as tq
+
+    L = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_limit:
+        L = frame_limit
+ 
+    xyz = trajectory3d.values[:, 2:]
+    for i in tq.tqdm(range(L)):
+        ret, frame = cap.read()
+        frame = court3d.draw_lines(frame)
+        P = court3d.project_uv(xyz[i])
+        centre = (int(P[0]), int(P[1]))
+        radius = 5
+        colour = (0, 255, 0)
+        thickness = -1
+        frame = cv2.circle(frame, centre, radius, colour, thickness)      
         outvid.write(frame)
     outvid.release()
