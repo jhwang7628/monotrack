@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from tensorflow.python.keras.saving import hdf5_format
@@ -95,15 +96,17 @@ class AdhocHitDetector(HitDetector):
         plt.hist(np.diff(result))
         print('Average time between shots (s):', np.average(np.diff(result)) / fps)
         return result, is_hit
-       
-def scale_by_col(x, cols):
-    x_ = x[:, cols]
-    m, M = np.min(x_[x_ != 0]), np.max(x_[x_ != 0])
-    x_[x_ != 0] = (x_[x_ != 0] - m) / (M - m) + 1
-    x[:, cols] = x_
-    return x
 
 def scale_data(x):
+    x = np.array(x)
+    def scale_by_col(x, cols):
+        x_ = np.array(x[:, cols])
+        idx = np.abs(x_) < eps
+        m, M = np.min(x_[~idx]), np.max(x_[~idx])
+        x_[~idx] = (x_[~idx] - m) / (M - m) + 1
+        x[:, cols] = x_
+        return x
+
     even_cols = [2*i for i in range(x.shape[1] // 2)]
     odd_cols = [2*i+1 for i in range(x.shape[1] // 2)]
     x = scale_by_col(x, even_cols)
@@ -153,7 +156,8 @@ class MLHitDetector(HitDetector):
         
         compute_logits = K.function([self.model.layers[0].input], [self.model.layers[-2].output])
         y_pred = tf.nn.softmax(compute_logits(x_inp)[0] / self.temperature).numpy()
-        
+#         y_pred = self.model.predict(x_inp)
+    
         detections = np.where(y_pred[:,0] < 0.1)[0]
         result, clusters, who_hit = [], [], []
         min_x, max_x = np.min(court_pts, axis=0)[0], np.max(court_pts, axis=0)[0]
@@ -186,14 +190,14 @@ class MLHitDetector(HitDetector):
         last_hit, last_time = -1, -1
         to_delete = [0] * len(result)
         for i, fid in enumerate(result):
-            if i+1 < len(result) and result[i+1] - fid > 1.6 * avg_hit:
-                is_hit.append(0)
-                continue
+#             if i+1 < len(result) and result[i+1] - fid > 1.6 * avg_hit:
+#                 is_hit.append(0)
+#                 continue
             if i >= len(who_hit):
                 break
                 
-            # Another filter: prevent two hits in a row by the same person within 1s
-            if fid - last_time < fps and last_hit == who_hit[i]:
+            # Another filter: prevent two hits in a row by the same person within 0.8s
+            if fid - last_time < 0.8 * fps and last_hit == who_hit[i]:
                 to_delete[i] = 1
                 continue
                 
@@ -205,7 +209,10 @@ class MLHitDetector(HitDetector):
         
         num_hits = sum(x > 0 for x in is_hit)
         print('Total shots hit by players:', )
-        print('Percentage of shots hit by player 1:', sum(x == 1 for x in is_hit) / num_hits)
+        if num_hits:
+            print('Percentage of shots hit by player 1:', sum(x == 1 for x in is_hit) / num_hits)
+        else:
+            print('No hits detected.')
         print('Total impacts detected:', len(result))
         print('Distribution of shot times:')
         plt.hist(np.diff(result))

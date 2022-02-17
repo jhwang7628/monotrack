@@ -105,6 +105,9 @@ class Pose:
         return self.bx[0] - epsx * dx < p[0] < self.bx[1] + epsx * dx and \
                self.by[0] - epsy * dy < p[1] < self.by[1] + epsy * dy
     
+'''
+Read the player poses. poses[0] is the bottom player, poses[1] is the top.
+'''
 def read_player_poses(input_prefix):
     bottom_player = pd.read_csv(input_prefix + '_player_bottom.csv')
     top_player = pd.read_csv(input_prefix + '_player_top.csv')

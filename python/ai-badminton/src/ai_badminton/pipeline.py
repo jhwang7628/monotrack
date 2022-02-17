@@ -6,6 +6,7 @@ from .trajectory import *
 from .pose import *
 from .court import *
 from .video_annotator import *
+from .rally_reconstructor import *
 
 import multiprocessing
 
@@ -41,14 +42,17 @@ class Pipeline(object):
 
     def make_output_dirs(self, output_dir):
         os.makedirs(output_dir, exist_ok=True)
-        for info in ['ball_trajectory', 'court', 'poses', 'rally_video', 'shot', 'annotated']:
+        for info in ['ball_trajectory', 'court', 'poses', 'rally_video', 'shot', 'annotated', '3d', 'annotated3d']:
             status = os.makedirs('%s/%s' % (output_dir, info), exist_ok=True)
             if status:
                 return status
         return status
 
-    def save_video(self):
-        shutil.copyfile(self.video_path, '%s/%s' % (self.output_path, self.video_name))
+    def save_video(self, path=None):
+        if path is None:
+            shutil.copyfile(self.video_path, '%s/%s' % (self.output_path, self.video_name))
+        else:
+            shutil.copyfile(self.video_path, path)
 
     def detect_court(self, detector_path):
         status = os.system('%s %s %s/court/%s.out' % (detector_path, self.video_path, self.output_path, self.video_prefix))
@@ -56,19 +60,19 @@ class Pipeline(object):
     
     def detect_poses(self, pose_path, model_path, model_type):
         if model_type == 'detectron2':
-            status = os.system('python3 %s --gpus 4 -i %s -f %s/poses/%s.out -p --config-file %s' % (pose_path, self.video_path, self.output_path, self.video_prefix, model_path))
+            status = os.system('/opt/conda/bin/python3 %s --gpus 4 -i %s -f %s/poses/%s.out -p --config-file %s' % (pose_path, self.video_path, self.output_path, self.video_prefix, model_path))
             self.postprocess_poses()
             return status
         elif model_type == 'mmpose':
-            command = "python3 /home/code-base/user_space/ai-badminton/mmpose/run_mmpose.py /home/code-base/user_space/ai-badminton/mmpose/configs/faster_rcnn_r50_fpn_coco.py     https://download.openmmlab.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_1x_coco/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth     /home/code-base/user_space/ai-badminton/mmpose/configs/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py     https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth --video-path %s --out-file %s/poses/%s.out" % (self.video_path, self.output_path, self.video_prefix)
-            self.postprocess_poses(fullPose=True)
+            command = "/opt/conda/bin/python3 /home/code-base/user_space/ai-badminton/mmpose/run_mmpose.py /home/code-base/user_space/ai-badminton/mmpose/configs/faster_rcnn_r50_fpn_coco.py     https://download.openmmlab.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_1x_coco/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth     /home/code-base/user_space/ai-badminton/mmpose/configs/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py     https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth --video-path %s --out-file %s/poses/%s.out" % (self.video_path, self.output_path, self.video_prefix)
             status = os.system(command)
+            self.postprocess_poses(fullPose=True)
             return status
         else:
             raise Exception('Unsupported pose model!')
     
     def detect_shuttles(self, tracknet_path, model_path):
-        status = os.system('python3 %s --video_name=%s --load_weights=%s' % (tracknet_path, self.video_path, model_path))
+        status = os.system('/opt/conda/bin/python3 %s --video_name=%s --load_weights=%s' % (tracknet_path, self.video_path, model_path))
         if status:
             return status
         video = '/'.join(os.path.split(self.video_path)[:-1]) + '/' + self.video_prefix
@@ -129,12 +133,66 @@ class Pipeline(object):
             os.system("ffmpeg -i %s -c:v libx264 -crf 18 -preset slow -c:a copy tmp.mp4" % outfile)
             os.system("mv tmp.mp4 %s" % outfile)
         
+    def reconstruct_trajectory(self, visualize=True):        
+        trajectory = Trajectory('%s/ball_trajectory/%s_ball.csv' % (self.output_path, self.video_prefix))
+        poses = read_player_poses('%s/poses/%s' % (self.output_path, self.video_prefix))
+        hits = read_hits_file('%s/shot/%s_hit.csv' % (self.output_path, self.video_prefix))
+        
+        court_pts = read_court('%s/court/%s.out' % (self.output_path, self.base_prefix))
+        corners = [court_pts[1], court_pts[2], court_pts[0], court_pts[3]]
+        pole_tips = [court_pts[4], court_pts[5]]
+        court3d = Court3D(corners, pole_tips)
+        
+        cap = cv2.VideoCapture('%s' % self.video_path)
+        if cap.isOpened() is False:
+            print('Error opening video stream or file')
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        
+        reconstructor = RallyReconstructor(
+            court3d,
+            poses,
+            trajectory,
+            hits
+        )
+        
+        results = reconstructor.reconstruct(fps)
+        # Write hit to csv file
+        L = min(len(trajectory.X), results.shape[0])
+        frames = list(range(L))
+        
+        data = {
+            'frame' : frames, 
+            'ball_x' : results[:, 0].tolist(), 
+            'ball_y' : results[:, 1].tolist(), 
+            'ball_z' : results[:, 2].tolist()
+        }
+        df = pd.DataFrame(data=data)
+        df.to_csv('%s/3d/%s_3d.csv' % (self.output_path, self.video_prefix))
+        
+        if visualize:
+            annotated2d = '%s/annotated/%s_annotated.mp4' % (self.output_path, self.video_prefix)
+            cap = cv2.VideoCapture(annotated2d)
+            if cap.isOpened() is False:
+                cap = cv2.VideoCapture('%s' % self.video_path)
+            df = pd.read_csv('%s/3d/%s_3d.csv' % (self.output_path, self.video_prefix))
+            outfile = '%s/annotated3d/%s_3d.mp4' % (self.output_path, self.video_prefix)
+            annotate_video_3d(
+                cap, court3d,
+                df,
+                outfile=outfile
+            )
+            
+            # Re-encode with ffmpeg from mp41 to mp42
+            os.system("ffmpeg -i %s -c:v libx264 -crf 18 -preset slow -c:a copy tmp.mp4" % outfile)
+            os.system("mv tmp.mp4 %s" % outfile)
+                
     def set_video_variables(self, video_path):
         self.video_path = video_path
         self.video_name = os.path.split(self.video_path)[-1]
         self.video_prefix, _ = os.path.splitext(self.video_name)
         
-    def run_pipeline(self, video_path, output_path, annotate=False):
+    def run_pipeline(self, video_path, output_path, annotate=True, split_cuts=False):        
         logfile = open('%s/log.txt' % output_path, 'w')
         self.output_path = output_path
         self.make_output_dirs(output_path)
@@ -143,19 +201,23 @@ class Pipeline(object):
         # For use in court preprocessing step
         self.base_prefix, _ = os.path.splitext(self.video_name)
         
-#         logfile.write('Splitting file into shots...\n')
-#         status = self.split_cuts(self.shotcut_model)
-#         if status:
-#             return
+        if split_cuts:
+            logfile.write('Splitting file into shots...\n')
+            status = self.split_cuts(self.shotcut_model)
+            if status:
+                return
+
+            self.save_video()
+            logfile.write('Done file splitting!\n')
+        else:
+            self.save_video('%s/rally_video/%s' % (self.output_path, self.video_name))
+            logfile.write('Assumed entire video is one rally.\n')
         
-        self.save_video()
-        logfile.write('Done file splitting!\n')
-        
-#         logfile.write('Detecting courts...\n')
-#         # Assumes the same court persists throughout the video
-#         status = self.detect_court(self.detector_model)
-#         if status:
-#             return
+        logfile.write('Detecting courts...\n')
+        # Assumes the same court persists throughout the video
+        status = self.detect_court(self.detector_model)
+        if status:
+            return
         
         videos = os.listdir('%s/rally_video' % self.output_path)
         print(len(videos))
@@ -188,6 +250,8 @@ class Pipeline(object):
                     p = multiprocessing.Process(target=detect)
                     p.start()
                     p.join()
+                    
+                    self.reconstruct_trajectory()
                 except:
                     logfile.write('Something went wrong!\n')
                     pass

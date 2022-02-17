@@ -11,16 +11,18 @@ using namespace cv;
 
 int main(int argc, char** argv)
 {
-  TimeMeasurement::debug = true;
-  CourtLinePixelDetector::debug = true;
+  TimeMeasurement::debug = false;
+  CourtLinePixelDetector::debug = false;
   CourtLineCandidateDetector::debug = false;
   TennisCourtFitter::debug = false;
 
-  if (argc < 2 || argc > 3)
+  if (argc < 2 || argc > 4)
   {
     std::cout << "Usage: ./detect video_path [output_path]" << std::endl;
     std::cout << "       video_path:  path to an input avi file." << std::endl;
     std::cout << "       output_path: path to an output file where the xy court point coordinates will be written." << std::endl;
+    std::cout << "                    This argument is optional. If not present, then a window with the result will be opened." << std::endl;
+    std::cout << "       output_image_path: path to an output file where the image will be written." << std::endl;
     std::cout << "                    This argument is optional. If not present, then a window with the result will be opened." << std::endl;
     return -1;
   }
@@ -62,11 +64,17 @@ int main(int argc, char** argv)
       model.drawModel(frame);
       displayImage("Result - press key to exit", frame);
     }
-    else if (argc == 3)
+    if (argc >= 3)
     {
       std::string outFilename(argv[2]);
       model.writeToFile(outFilename);
       std::cout << "Result written to " << outFilename << std::endl;
+    }
+    if (argc >= 4)
+    {
+      std::string outFilename(argv[3]);
+      model.drawModel(frame);
+      writeImage(outFilename, frame);
     }
 
   }

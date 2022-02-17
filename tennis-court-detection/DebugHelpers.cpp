@@ -24,6 +24,10 @@ void displayImage(const string& windowName, const Mat& image, int delay)
   waitKey(delay);
 }
 
+void writeImage(const string& imageName, const Mat& image)
+{
+  imwrite(imageName, image);
+}
 
 void drawLines(std::vector<Line>& lines, cv::Mat& image, cv::Scalar color, int thickness)
 {
