@@ -1,9 +1,12 @@
+
+# Install MMPose and MMdet
+
 ## working versions:
-# pytorch: 1.11.0
-# cuda: 11.3
-# mmcv-full: 1.5.0
-# mmdet: 2.23.0
-# numpy: 1.22.3
+### pytorch: 1.11.0
+### cuda: 11.3
+### mmcv-full: 1.5.0
+### mmdet: 2.23.0
+### numpy: 1.22.3
 
 conda install pytorch=1.11.0 torchvision torchaudio cudatoolkit=11.3 -c pytorch
 
