@@ -41,10 +41,10 @@ tracknet_weights='model906_30'
 student_weights='tracknet_improved_42'
 save_weights='tracknet_improved'
 dataDir='npy-color-small'
-epochs=100
+epochs=100 # Jui: epochs = 10
 tol=4
 
-strategy = tf.distribute.MirroredStrategy(["GPU:1", "GPU:2", "GPU:3"])
+strategy = tf.distribute.MirroredStrategy(["GPU:1", "GPU:2", "GPU:3"]) # Jui: might want to remove the GPUs
 with strategy.scope():
     OPT = optimizers.Adadelta(lr=1.0)
 

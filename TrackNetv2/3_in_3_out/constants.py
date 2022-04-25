@@ -11,7 +11,7 @@ HEIGHT = 288
 WIDTH = 512
 NUM_AUGMENTATIONS = 6
 
-sigma = 3
+sigma = 3 # Jui: either 3 or 5
 grayscale = False
 use_mp = False
 hard_mining = False
