@@ -9,6 +9,7 @@ from .video_annotator import *
 from .rally_reconstructor import *
 
 import multiprocessing
+from pathlib import Path
 
 """
 The pipeline takes in an input video and performs several transformations:
@@ -258,3 +259,15 @@ class Pipeline(object):
 
         # All done!
         return 0
+
+def run_pose_detection_on_match(match_dir_path):
+    print(match_dir_path)
+
+
+
+if __name__ == "__main__":
+
+    base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
+    for match_idx in range(1, 23):
+        run_pose_detection_on_match(base_dir / f"match{match_idx}")
+
