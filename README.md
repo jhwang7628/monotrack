@@ -14,7 +14,7 @@ In general, the options for the script are:
 ```
 python process_video.py -i [video_file] -p -d --config-file [model_file]
 ```
-A list of different models can be found in configs (see complete list [here](https://github.com/facebookresearch/detectron2/blob/master/MODEL_ZOO.md)). 
+A list of different models can be found in configs (see complete list [here](https://github.com/facebookresearch/detectron2/blob/master/MODEL_ZOO.md)).
 
 3. (Optional) Use some of our mined badminton videos instead: [Drive Link](https://drive.google.com/file/d/17CcjALOAl51mmlUmV5qw7KFJreWvz4RV/view?usp=sharing).
 
@@ -39,7 +39,7 @@ See README file in `./TrackNetv2`. TrackNetv2 produces a csv file of the shuttle
 
 2. Put the video, pose output, and the shuttle output files into `notebooks/data`. Rename the pose output file to be `[video_name]_poses.out` and the shuttle output file to be `[video_name]_predict.csv`.
 
-3. Create the folder `notebooks/output`. Step through the cells of `notebooks/single-match-analysis.ipynb`. The output will be written to `notebooks/output`.  
+3. Create the folder `notebooks/output`. Step through the cells of `notebooks/single-match-analysis.ipynb`. The output will be written to `notebooks/output`.
 
 # (Optional) Mining the datasets
 
