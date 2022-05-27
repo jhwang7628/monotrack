@@ -13,7 +13,8 @@ add_compile_options(
 )
 
 # Fetch opencv from source
-set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/external" CACHE PATH "Directory under which to collect all populated content")
+set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps" CACHE PATH "Directory under which to collect all populated content")
+
 
 list(PREPEND CMAKE_MODULE_PATH
     "${PROJECT_SOURCE_DIR}/cmake/recipes/external/"
