@@ -9,7 +9,7 @@ MIN_LOSS_F = 0.999
 
 HEIGHT = 288
 WIDTH = 512
-NUM_AUGMENTATIONS = 6
+NUM_AUGMENTATIONS = 1
 
 sigma = 3 # Jui: either 3 or 5
 grayscale = False

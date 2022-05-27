@@ -37,9 +37,11 @@ for device in gpu_devices:
 #     print('Compute dtype: %s' % policy.compute_dtype)
 #     print('Variable dtype: %s' % policy.variable_dtype)
 
-dataDir = 'npy-color-small'
-testDir = 'npy-color-small-test'
-elasDir = 'npy-color-mada'
+dataDir = 'npy-color-augmented-elastic'
+testDir = 'npy-color-augmented-elastic'
+#dataDir = 'npy-color-small'
+#testDir = 'npy-color-small-test'
+#elasDir = 'npy-color-mada'
 tol = 4
 epochs = 100
 try:
@@ -88,7 +90,7 @@ with strategy.scope():
 #         imgs_output = Reshape(target_shape=(NUM_CONSEC * 3, HEIGHT, WIDTH))(x)
 #         model = Model(imgs_input, model(imgs_output))
 
-#         model.compile(loss=custom_loss, optimizer=OPT, metrics=['accuracy', tf.keras.metrics.MeanIoU(num_classes=2)])
+        model.compile(loss=custom_loss, optimizer=OPT, metrics=['accuracy', tf.keras.metrics.MeanIoU(num_classes=2)])
 
 # Fetching data with random restarts to simulate random data shuffling
 def fetch_data(X, Y, num_consec=NUM_CONSEC, batch_size=BATCH_SIZE):
@@ -133,15 +135,15 @@ for i in data_indices:
     y_path = os.path.abspath(os.path.join(dataDir, 'y_data_' + str(i) + '.npy'))
     files.append((x_path, y_path))
 
-r = os.path.abspath(elasDir)
-path = glob(os.path.join(r, '*.npy'))
-num = len(path) // 2
-    
-data_indices = list(range(1, num+1))
-for i in data_indices:
-    x_path = os.path.abspath(os.path.join(elasDir, 'x_data_' + str(i) + '.npy'))
-    y_path = os.path.abspath(os.path.join(elasDir, 'y_data_' + str(i) + '.npy'))
-    files.append((x_path, y_path))
+#r = os.path.abspath(elasDir)
+#path = glob(os.path.join(r, '*.npy'))
+#num = len(path) // 2
+#    
+#data_indices = list(range(1, num+1))
+#for i in data_indices:
+#    x_path = os.path.abspath(os.path.join(elasDir, 'x_data_' + str(i) + '.npy'))
+#    y_path = os.path.abspath(os.path.join(elasDir, 'y_data_' + str(i) + '.npy'))
+#    files.append((x_path, y_path))
     
 
 random.shuffle(files)

@@ -18,8 +18,11 @@ import shutil
 import pandas as pd
 import cv2
 
-game_list = ['/home/code-base/scratch_space/data/match' + str(i) for i in range(1, 27)]
-dataDir = 'npy-color-augmented-elastic'
+game_list = ['/home/juiwang/ai-badminton/data/tracknetv2/profession_dataset/match' + str(i) for i in range(1, 27)]
+#dataDir = 'npy-color-augmented-elastic'
+dataDir = 'npy-color-no-augmentation'
+
+print(game_list)
 
 # if os.path.exists(dataDir):
 #     shutil.rmtree(dataDir)
@@ -29,7 +32,8 @@ gen_frames = False
 if gen_frames:
     # First generate the frames
     for game in game_list:
-        gameDir = os.path.join('/home/code-base/scratch_space/data/', game)
+        print(game)
+        gameDir = os.path.join('/home/juiwang/ai-badminton/data/tracknetv2/profession_dataset', game)
         frameDir = os.path.join(gameDir, 'frame')
         rallyDir = os.path.join(gameDir, 'rally_video')
         os.makedirs(frameDir, exist_ok=True)
@@ -50,7 +54,7 @@ if gen_frames:
             
 def augment(image, params):
 #     image = elastic_transform(image, image.shape[1] * 2, image.shape[1] * 0.08, image.shape[1] * 0.08, params['seed'])
-    image = augmenter.apply_transform(image, params)
+    # image = augmenter.apply_transform(image, params) # Jui: disabling the augmentation for the distillation
     return image
 
 augmenter = ImageDataGenerator(
