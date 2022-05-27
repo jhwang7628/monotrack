@@ -34,3 +34,6 @@ ulimit -n 4096
 
 # to find libcudart.so
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/conda/envs/ai-badminton/lib/
+
+# setup ffmpeg
+sudo apt-get install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev ffmpeg
