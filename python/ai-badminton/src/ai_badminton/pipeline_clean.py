@@ -18,10 +18,14 @@ import subprocess
 ####################################################################################################
 
 MODEL_PATH = "/home/juiwang/ai-badminton/data/models"
-DET_CONFIG = "/home/juiwang/ai-badminton/code/ai-badminton/mmpose/configs/faster_rcnn_r50_fpn_coco.py"
+CODE_BASE_PATH = "/home/juiwang/ai-badminton/code/ai-badminton"
+
+DET_CONFIG = f"{CODE_BASE_PATH}/mmpose/configs/faster_rcnn_r50_fpn_coco.py"
+POSE_CONFIG = f"{CODE_BASE_PATH}/mmpose/configs/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py"
 DET_CHECKPOINT = f"{MODEL_PATH}/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth"
-POSE_CONFIG = "/home/juiwang/ai-badminton/code/ai-badminton/mmpose/configs/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py"
 POSE_CHECKPOINT = f"{MODEL_PATH}/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth"
+
+COURT_DETECTION_BIN = f"{CODE_BASE_PATH}/tennis-court-detection/build/bin/detect"
 
 # optional
 DEVICE="cuda:0"
@@ -38,7 +42,10 @@ def assert_file_exists(file_path):
 
 def run(cmd):
     print(cmd)
-    subprocess.check_call(cmd, shell=True)
+    try:
+        subprocess.check_call(cmd, shell=True)
+    except subprocess.CalledProcessError:
+        raise Exception("cmd process returned error code")
 
 def run_mmpose(video_path, output_file, det_model, pose_model):
 
@@ -102,17 +109,44 @@ def run_pose_detection_on_match(match_dir):
     assert rally_dir.is_dir()
 
     for video_path in rally_dir.iterdir():
-        print("\n\n", video_path)
+        print("\n", video_path)
         output_file = pose_output / (video_path.stem + ".out")
         if output_file.is_file():
             continue
 
         run_mmpose(video_path, str(output_file), det_model, pose_model)
 
+def run_court_detection_on_match(match_dir):
+
+    assert_file_exists(COURT_DETECTION_BIN)
+
+    court_output = match_dir / "court"
+    court_output.mkdir(parents=True, exist_ok=True)
+
+    rally_dir = match_dir / "rally_video"
+    assert rally_dir.is_dir()
+
+    for video_path in rally_dir.iterdir():
+        print("\n", video_path)
+        output_file = court_output / (video_path.stem + ".out")
+        if output_file.is_file():
+            continue
+
+        cmd = f"{COURT_DETECTION_BIN} {str(video_path)} {str(output_file)}"
+        try:
+            run(cmd)
+        except Exception:
+            print(f"ERROR on computing court for {str(video_path)} in {str(match_dir)}")
+
 if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
     for match_idx in range(1, 23):
+        print(f"\n\nComputing ML data for match_{match_idx}")
+
         match_dir = base_dir / f"match{match_idx}"
+        print("=== Running pose detection ===")
         run_pose_detection_on_match(match_dir)
+        print("=== Running court detection ===")
+        run_court_detection_on_match(match_dir)
 
