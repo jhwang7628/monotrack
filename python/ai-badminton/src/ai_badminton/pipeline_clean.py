@@ -116,6 +116,9 @@ def run_pose_detection_on_match(match_dir):
 
         run_mmpose(video_path, str(output_file), det_model, pose_model)
 
+def run_pose_postprocessing():
+    pass
+
 def run_court_detection_on_match(match_dir):
 
     assert_file_exists(COURT_DETECTION_BIN)

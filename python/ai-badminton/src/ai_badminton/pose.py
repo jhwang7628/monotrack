@@ -15,15 +15,15 @@ class Pose:
     ]
 
     joint_names = [
-        "nose", "left_eye", "right_eye", "left_ear", "right_ear", 
-        "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", 
-        "left_wrist", "right_wrist", "left_hip", "right_hip", 
+        "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+        "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+        "left_wrist", "right_wrist", "left_hip", "right_hip",
         "left_knee", "right_knee", "left_ankle", "right_ankle" ]
-    
+
     def __init__(self, kplines=[], fullPose=False):
         if not kplines:
             return
-        
+
         keypoints = []
         self.score = 0
         for kp, line in enumerate(kplines):
@@ -35,14 +35,14 @@ class Pose:
             keypoints.append((int(i), np.array([px, py])))
             self.score += score
         self.init_from_kp(keypoints)
-    
+
     def init_from_kparray(self, kparray):
         kp = np.array(kparray).reshape((17, 2))
         keypoints = []
         for i in range(17):
             keypoints.append((i, kp[i]))
         self.init_from_kp(keypoints)
-        
+
     # Each pose has 17 key points, representing the skeleton
     def init_from_kp(self, keypoints):
         # Keypoints should be tuples of (id, point)
@@ -51,11 +51,11 @@ class Pose:
 
         for i, p in keypoints:
             self.kp[i] = p
-        
+
         self.bx = [min(self.kp[:, 0]), max(self.kp[:, 0])]
         self.by = [min(self.kp[:, 1]), max(self.kp[:, 1])]
-        
-    
+
+
     def draw_skeleton(self, img, colour=(0, 128, 0), thickness=5):
         cimg = img.copy()
         for line in self.skeleton:
@@ -73,7 +73,7 @@ class Pose:
             else:
                 cimg = cv2.line(cimg, p0, p1, colour, thickness)
         return cimg
-    
+
     def get_base(self):
         # Returns the midpoint of the two ankle positions
         # Returning one of the two points if theres a NaN
@@ -87,31 +87,31 @@ class Pose:
         elif left_nan and right_nan:
             return self.get_centroid()
         return (self.kp[15] + self.kp[16]) / 2.
-    
+
     def get_centroid(self):
         n = 0
         p = np.zeros((2,))
         for i in range(17):
             if any(np.isnan(self.kp[i])) or max(self.kp[i]) == 0:
                 continue
-            
+
             n += 1
             p += self.kp[i]
         return p / n
-    
+
     def can_reach(self, p, epsx=1.5, epsy=1.5):
         # if within (1+/-eps) of the bounding box then we can reach it
         dx, dy = self.bx[1] - self.bx[0], self.by[1] - self.by[0]
         return self.bx[0] - epsx * dx < p[0] < self.bx[1] + epsx * dx and \
                self.by[0] - epsy * dy < p[1] < self.by[1] + epsy * dy
-    
+
 '''
 Read the player poses. poses[0] is the bottom player, poses[1] is the top.
 '''
 def read_player_poses(input_prefix):
     bottom_player = pd.read_csv(input_prefix + '_player_bottom.csv')
     top_player = pd.read_csv(input_prefix + '_player_top.csv')
-    
+
     bottom_player.drop('frame', axis=1, inplace=True)
     top_player.drop('frame', axis=1, inplace=True)
     bottom_player.fillna(method='bfill', inplace=True)
@@ -120,10 +120,10 @@ def read_player_poses(input_prefix):
     top_player.fillna(method='ffill', inplace=True)
     bottom_player.fillna(0, inplace=True)
     top_player.fillna(0, inplace=True)
-    
+
     poses = [bottom_player, top_player]
     return poses
-        
+
 '''
 Processes the raw text pose output from the pose estimation scripts.
 '''
@@ -160,7 +160,7 @@ def process_pose_file(input_path, output_prefix, court, fullPose=False):
         filter_pose(fid, kplines)
 
     print('Read in files. Processing poses...')
-    
+
     import tqdm.auto as tq
     lines = poses.readlines()
     for lid in tq.tqdm(range(len(lines))):
@@ -171,10 +171,10 @@ def process_pose_file(input_path, output_prefix, court, fullPose=False):
             frame_id += 1
         else:
             pose_lines.append(line)
-    
+
     process_poses(frame_id, pose_lines)
     frame_id += 1
-    
+
     try:
         os.makedirs('output')
     except OSError as e:
@@ -214,5 +214,5 @@ def process_pose_file(input_path, output_prefix, court, fullPose=False):
     top_player = pd.read_csv(output_prefix + '_player_top.csv')
     players = [bottom_player, top_player]
     print('Done!')
-    
+
     return players
