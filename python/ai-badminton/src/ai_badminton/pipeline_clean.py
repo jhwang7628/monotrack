@@ -1,3 +1,6 @@
+from ai_badminton.pose import process_pose_file
+from ai_badminton.court import Court, read_court
+
 from tqdm import tqdm
 import cv2
 
@@ -116,8 +119,27 @@ def run_pose_detection_on_match(match_dir):
 
         run_mmpose(video_path, str(output_file), det_model, pose_model)
 
-def run_pose_postprocessing():
-    pass
+def run_pose_postprocessing(match_dir):
+
+    court_path = match_dir / "court"
+    assert court_path.is_dir(), f"Court path {str(court_path)} does not exist."
+    for p in court_path.iterdir():
+        if p.suffix == ".out":
+            print(f"Reading court file: {str(p)}")
+            court_pts = read_court(str(p))
+            corners = [court_pts[1], court_pts[2], court_pts[0], court_pts[3]]
+            court = Court(corners)
+
+            pose_path = match_dir / "poses" / (p.stem + ".out")
+            assert pose_path.is_file(), f"Pose path {str(pose_path)} does not exist["
+
+            output_prefix = pose_path.with_suffix("")
+
+            print(f"Processing pose file {str(pose_path)} with output prefix {str(output_prefix)}")
+            process_pose_file(str(pose_path),
+                              str(output_prefix),
+                              court,
+                              True)
 
 def run_court_detection_on_match(match_dir):
 
@@ -144,12 +166,27 @@ def run_court_detection_on_match(match_dir):
 if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
-    for match_idx in range(1, 23):
-        print(f"\n\nComputing ML data for match_{match_idx}")
 
-        match_dir = base_dir / f"match{match_idx}"
+    # training data
+    #for match_idx in range(1, 23):
+    #    print(f"\n\nComputing ML data for match_{match_idx}")
+
+    #    match_dir = base_dir / f"match{match_idx}"
+    #    print("=== Running pose detection ===")
+    #    run_pose_detection_on_match(match_dir)
+    #    print("=== Running pose postprocessing ===")
+    #    run_pose_postprocessing(match_dir)
+    #    print("=== Running court detection ===")
+    #    run_court_detection_on_match(match_dir)
+
+    # validation data
+    for match_idx in range(1, 4):
+        print(f"\n\nComputing ML data for test_match_{match_idx}")
+
+        match_dir = base_dir / f"test_match{match_idx}"
         print("=== Running pose detection ===")
         run_pose_detection_on_match(match_dir)
         print("=== Running court detection ===")
         run_court_detection_on_match(match_dir)
-
+        print("=== Running pose postprocessing ===")
+        run_pose_postprocessing(match_dir)

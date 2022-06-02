@@ -26,13 +26,16 @@ pip install -U numpy
 pip install piexif
 pip install tqdm
 pip install tensorflow
+pip install tensorflow-addons
 pip install focal-loss
 conda install -y dask
 
 # raise the number of files that can be opened
 ulimit -n 4096
 
-# to find libcudart.so
+# to be able to find libcudart.so
+# hack: in jupyter notebook, you have to manually set the kernel file to load the env for this to
+# work. I followed this thread to set it up: https://stackoverflow.com/a/53595397
 export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/conda/envs/ai-badminton/lib/
 
 # setup ffmpeg
