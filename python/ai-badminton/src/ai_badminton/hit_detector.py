@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from tensorflow.python.keras.saving import hdf5_format
 import h5py
 from tensorflow.keras import backend as K
-from tensorflow.keras.layers import Bidirectional
 
 from .pose import Pose
 
@@ -14,18 +13,18 @@ class HitDetector(object):
         self.court = court
         self.poses = poses
         self.trajectory = trajectory
-        
+
     # Returns the hits in the given trajectory as well as who hit it
     # Output is are two lists of values:
     #   - List of frame ids where things are hit
     #   - 0 (no hit), 1 (bottom player hits), 2 (top player hits)
     def detect_hits(self):
         pass
-    
+
 class AdhocHitDetector(HitDetector):
     def __init__(self, poses, trajectory):
-        super().__init__(None, poses, trajectory)  
-    
+        super().__init__(None, poses, trajectory)
+
     def _detect_hits_1d(self, z, thresh=4, window=8):
         # For a hit to be registered, the point must be a local max / min and
         # the slope must exceed thresh on either the left or right side
@@ -56,11 +55,11 @@ class AdhocHitDetector(HitDetector):
             self._detect_hits_1d(y, thresh, window),
             closeness
         )
-    
+
     def detect_hits(self, fps=25):
         Xb, Yb = self.trajectory.X, self.trajectory.Y
         result = self._detect_hits(Xb, Yb)
-    
+
         # Filter hits by pose
         is_hit = []
         last_hit = -1
@@ -70,7 +69,7 @@ class AdhocHitDetector(HitDetector):
             if i+1 < len(result) and result[i+1] - fid > 1.6 * avg_hit:
                 is_hit.append(0)
                 continue
-                
+
             if fid > self.poses[0].values.shape[0]:
                 break
 
@@ -115,13 +114,15 @@ def scale_data(x):
     return x
 
 class MLHitDetector(HitDetector):
+
+
     def __init__(self, court, poses, trajectory, model_path):
         super().__init__(court, poses, trajectory)
-    
+
         with h5py.File(model_path, mode='r') as f:
             self.temperature = f.attrs['temperature']
             self.model = hdf5_format.load_model_from_hdf5(f)
-        
+
         import tensorflow.keras.backend as K
 
         trainable_count = np.sum([K.count_params(w) for w in self.model.trainable_weights])
@@ -150,15 +151,15 @@ class MLHitDetector(HitDetector):
             x_bird = np.array(list(zip(Xb[i:end], Yb[i:end])))
             x_pose = np.hstack([bottom_player.values[i:end], top_player.values[i:end]])
             x = np.hstack([x_bird, x_pose, np.array([corners for j in range(i, end)])])
-            
+
             x_list.append(x)
         x_inp = np.hstack(x_list)
-        x_inp = scale_data(x_inp)        
-        
+        x_inp = scale_data(x_inp)
+
         compute_logits = K.function([self.model.layers[0].input], [self.model.layers[-2].output])
         y_pred = tf.nn.softmax(compute_logits(x_inp)[0] / self.temperature).numpy()
 #         y_pred = self.model.predict(x_inp)
-    
+
         detections = np.where(y_pred[:,0] < 0.1)[0]
         result, clusters, who_hit = [], [], []
         min_x, max_x = np.min(court_pts, axis=0)[0], np.max(court_pts, axis=0)[0]
@@ -196,18 +197,18 @@ class MLHitDetector(HitDetector):
 #                 continue
             if i >= len(who_hit):
                 break
-                
+
             # Another filter: prevent two hits in a row by the same person within 0.8s
             if fid - last_time < 0.8 * fps and last_hit == who_hit[i]:
                 to_delete[i] = 1
                 continue
-                
+
             is_hit.append(who_hit[i])
             last_time = fid
             last_hit = who_hit[i]
-            
+
         result = [r for i, r in enumerate(result) if not to_delete[i]]
-        
+
         num_hits = sum(x > 0 for x in is_hit)
         print('Total shots hit by players:', )
         if num_hits:
