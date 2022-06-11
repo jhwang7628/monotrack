@@ -1,8 +1,7 @@
-from ai_badminton.pose import process_pose_file
-from ai_badminton.court import Court, read_court
-
-from tqdm import tqdm
-import cv2
+from ai_badminton.pose import process_pose_file, read_player_poses
+from ai_badminton.court import Court, read_court, court_points_to_corners
+from ai_badminton.hit_detector import MLHitDetector
+from ai_badminton.trajectory import Trajectory
 
 from mmpose.apis import (inference_top_down_pose_model, init_pose_model,
                          process_mmdet_results, vis_pose_result)
@@ -15,8 +14,25 @@ except (ImportError, ModuleNotFoundError):
 
 assert has_mmdet, 'Please install mmdet to run the demo.'
 
+from tqdm import tqdm
+import cv2
+from tensorflow.keras.models import load_model, Model
+from tensorflow.keras.layers import Input, Reshape
+import tensorflow.keras.backend as K
+import pandas as pd
+
+import numpy as np
+
 from pathlib import Path
 import subprocess
+import time
+
+# TrackNet dependencies
+import sys
+sys.path.insert(0, "/sensei-fs/users/juiwang/ai-badminton/code/ai-badminton/TrackNetv2/3_in_3_out")
+from tracknet_improved import custom_loss
+from utils import custom_time, get_coordinates
+from constants import NUM_CONSEC, HEIGHT, WIDTH, grayscale
 
 ####################################################################################################
 
@@ -27,6 +43,9 @@ DET_CONFIG = f"{CODE_BASE_PATH}/mmpose/configs/faster_rcnn_r50_fpn_coco.py"
 POSE_CONFIG = f"{CODE_BASE_PATH}/mmpose/configs/2d_kpt_sview_rgb_img/topdown_heatmap/coco/hrnet_w48_coco_256x192.py"
 DET_CHECKPOINT = f"{MODEL_PATH}/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth"
 POSE_CHECKPOINT = f"{MODEL_PATH}/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth"
+
+SHUTTLE_TRACKING_MODEL = f"{MODEL_PATH}/model906_30"
+HIT_DETECTION_MODEL = f"{MODEL_PATH}/hitnet_conv_model_predict_direction.h5"
 
 COURT_DETECTION_BIN = f"{CODE_BASE_PATH}/tennis-court-detection/build/bin/detect"
 
@@ -163,6 +182,180 @@ def run_court_detection_on_match(match_dir):
         except Exception:
             print(f"ERROR on computing court for {str(video_path)} in {str(match_dir)}")
 
+def tracknet_inference(video_path, weights_path, output_path):
+
+    print("tracnet_inference")
+    model = load_model(str(weights_path), custom_objects={"custom_loss": custom_loss})
+    imgs_input = Input(shape=(NUM_CONSEC, HEIGHT, WIDTH, 3))
+    x = K.permute_dimensions(imgs_input, (0, 1, 4, 2, 3))
+    imgs_output = Reshape(target_shape=(NUM_CONSEC*3, HEIGHT, WIDTH))(x)
+    model = Model(imgs_input, model(imgs_output))
+
+    print("Beginning prediction")
+    start = time.time()
+
+    stream = open(output_path, "w")
+    stream.write("Frame,Visibility,X,Y,Time\n")
+
+    cap = cv2.VideoCapture(str(video_path))
+
+    def read_frame():
+        flag, image = cap.read()
+        timestamp = custom_time(cap.get(cv2.CAP_PROP_POS_MSEC))
+        return flag, image, timestamp
+
+    success, images, frame_time = [], [], []
+    for i in range(NUM_CONSEC):
+        s, im, t = read_frame()
+        success.append(s)
+        images.append(im)
+        frame_time.append(t)
+
+    ratioy = images[0].shape[0] / HEIGHT
+    ratiox = images[0].shape[1] / WIDTH
+
+    size = (int(WIDTH*ratiox), int(HEIGHT*ratioy))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    if video_path.suffix == '.avi':
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+    elif video_path.suffix == '.mp4':
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    else:
+        assert False, f"video type can only be .avi or .mp4: {video_path}"
+
+    print('About to begin prediction...')
+
+    count = 0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    pbar = tqdm(total=total)
+
+    while True:
+        unit = []
+        # Adjust BGR format (cv2) to RGB format (PIL)
+        for i in range(NUM_CONSEC):
+            image = cv2.resize(images[i], dsize=(WIDTH, HEIGHT), interpolation=cv2.INTER_CUBIC)
+            if grayscale:
+                xi = np.average(image, axis=-1)
+            else:
+                xi = image
+            unit.append(xi)
+
+        unit = np.asarray(unit)
+        if grayscale:
+            unit = unit.reshape((1, NUM_CONSEC, HEIGHT, WIDTH))
+        else:
+            unit = unit.reshape((1, NUM_CONSEC, HEIGHT, WIDTH, 3))
+        unit = unit.astype('float32')
+        unit /= 255
+
+        y_pred = model.predict(unit, batch_size=1)[0]
+        y_pred = y_pred > 0.5
+        y_pred = (y_pred * 255).astype('uint8')
+        for i in range(NUM_CONSEC):
+            if np.max(y_pred[i]) == 0:
+                stream.write(str(count)+',0,0,0,'+frame_time[i]+'\n')
+            else:
+                x, y = get_coordinates(y_pred[i])
+                cx_pred, cy_pred = int(x * ratiox), int(y * ratioy)
+                stream.write(str(count)+',1,'+str(cx_pred)+','+str(cy_pred)+','+frame_time[i]+'\n')
+            count += 1
+
+        success, images, frame_time = [], [], []
+        for i in range(NUM_CONSEC):
+            try:
+                s, im, t = read_frame()
+                success.append(s)
+                images.append(im)
+                frame_time.append(t)
+            except:
+                pass
+
+        if len(success) < NUM_CONSEC or not success[-1]:
+            break
+
+        pbar.n = count
+        pbar.last_print_n = count
+        pbar.refresh()
+
+    stream.close()
+    end = time.time()
+    print('Prediction time:', end-start, 'secs')
+    print('Done......')
+
+def run_shuttle_detection(match_dir):
+
+    assert Path(SHUTTLE_TRACKING_MODEL).is_file()
+
+    shuttle_output = match_dir / "ball_trajectory"
+    shuttle_output.mkdir(parents=True, exist_ok=True)
+
+    rally_dir = match_dir / "rally_video"
+    assert rally_dir.is_dir()
+
+    for video_path in rally_dir.iterdir():
+        if video_path.suffix != ".mp4":
+            continue
+
+        output_path = shuttle_output / (video_path.stem + "_ball_predict.csv")
+        tracknet_inference(video_path, SHUTTLE_TRACKING_MODEL, output_path)
+
+def run_hit_detection_inference(video_path, trajectory, poses, court, hit_detection_model,
+                                output_path):
+
+    cap = cv2.VideoCapture(str(video_path))
+    assert cap.isOpened(), "Error opening video stream or file"
+
+    detector = MLHitDetector(
+        court,
+        poses,
+        trajectory,
+        hit_detection_model
+    )
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    result, is_hit = detector.detect_hits(fps)
+
+    # Write hit to csv file
+    L = len(trajectory.X)
+    frames = list(range(L))
+    hits = [0] * L
+    for fid, pid in zip(result, is_hit):
+        hits[fid] = pid
+
+    data = {'frame' : frames, 'hit' : hits}
+    df = pd.DataFrame(data=data)
+    df.to_csv(str(output_path))
+
+def run_hit_detection(match_path):
+
+    assert Path(HIT_DETECTION_MODEL).is_file()
+
+    hit_output = match_path / "shot"
+    hit_output.mkdir(parents=True, exist_ok=True)
+
+    rally_dir = match_path / "rally_video"
+    assert rally_dir.is_dir()
+
+    for video_path in rally_dir.iterdir():
+        if video_path.suffix != ".mp4":
+            continue
+
+        video_name = video_path.stem
+
+        print(f"Processing video: {video_name}")
+        poses = read_player_poses(str(match_path / "poses" / video_name))
+
+        court_pts = read_court(str(match_path / "court" / (video_name + ".out")))
+        court = Court(corners = court_points_to_corners(court_pts))
+
+        trajectory = Trajectory(str(match_path / "ball_trajectory" / (str(video_name) + "_ball_predict.csv")))
+
+        output_path = hit_output / (video_path.stem + "_hit_predict.csv")
+
+        run_hit_detection_inference(video_path, trajectory, poses, court, HIT_DETECTION_MODEL,
+                                    output_path)
+        break
+
 if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
@@ -172,21 +365,31 @@ if __name__ == "__main__":
     #    print(f"\n\nComputing ML data for match_{match_idx}")
 
     #    match_dir = base_dir / f"match{match_idx}"
-    #    print("=== Running pose detection ===")
-    #    run_pose_detection_on_match(match_dir)
-    #    print("=== Running pose postprocessing ===")
-    #    run_pose_postprocessing(match_dir)
-    #    print("=== Running court detection ===")
-    #    run_court_detection_on_match(match_dir)
+
+    #    #print("=== Running pose detection ===")
+    #    #run_pose_detection_on_match(match_dir)
+
+    #    #print("=== Running pose postprocessing ===")
+    #    #run_pose_postprocessing(match_dir)
+
+    #    #print("=== Running court detection ===")
+    #    #run_court_detection_on_match(match_dir)
+
+    #    print("=== Running shuttle detection ===")
+    #    run_shuttle_detection(match_dir)
 
     # validation data
-    for match_idx in range(1, 4):
-        print(f"\n\nComputing ML data for test_match_{match_idx}")
+    #for match_idx in range(1, 4):
+    #    print(f"\n\nComputing ML data for test_match_{match_idx}")
 
-        match_dir = base_dir / f"test_match{match_idx}"
-        print("=== Running pose detection ===")
-        run_pose_detection_on_match(match_dir)
-        print("=== Running court detection ===")
-        run_court_detection_on_match(match_dir)
-        print("=== Running pose postprocessing ===")
-        run_pose_postprocessing(match_dir)
+    #    match_dir = base_dir / f"test_match{match_idx}"
+    #    print("=== Running pose detection ===")
+    #    run_pose_detection_on_match(match_dir)
+    #    print("=== Running court detection ===")
+    #    run_court_detection_on_match(match_dir)
+    #    print("=== Running pose postprocessing ===")
+    #    run_pose_postprocessing(match_dir)
+
+    #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
+    run_hit_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
+

@@ -181,4 +181,5 @@ def read_court(filename):
     coordinates = [[float(x) for x in line.split(';')] for line in file]
     return coordinates
 
-
+def court_points_to_corners(pts):
+    return [pts[1], pts[2], pts[0], pts[3]]

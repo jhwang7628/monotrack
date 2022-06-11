@@ -6,6 +6,8 @@ import numpy as np
 from .pose import Pose
 from .rally_reconstructor import *
 
+COURT_IMG = "/home/juiwang/ai-badminton/code/ai-badminton/python/ai-badminton/src/ai_badminton/court.jpg"
+
 '''
 TODO: Figure out a clean way to encapsulate result, frame_lim, and is_hit.
 Also, update trajectory.
@@ -38,7 +40,7 @@ def annotate_video(cap,
     # Write the hits to video, draw a dot right as the shuttle is struck
     outvid = cv2.VideoWriter(outfile, cv2.VideoWriter_fourcc('m','p','4','v'), fps, (width, height))
 
-    court_img = cv2.imread('/home/code-base/user_space/ai-badminton/python/ai-badminton/src/ai_badminton/court.jpg')
+    court_img = cv2.imread(COURT_IMG)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     duration = 3
     bid = 0

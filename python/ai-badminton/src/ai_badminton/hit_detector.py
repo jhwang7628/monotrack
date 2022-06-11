@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from tensorflow.python.keras.saving import hdf5_format
 import h5py
 from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Bidirectional
 
 from .pose import Pose
 
