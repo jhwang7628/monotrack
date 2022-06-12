@@ -357,7 +357,6 @@ def run_hit_detection(match_path):
 
         run_hit_detection_inference(video_path, trajectory, poses, court, HIT_DETECTION_MODEL,
                                     output_path)
-        break # FIXME debug
 
 if __name__ == "__main__":
 
@@ -406,6 +405,7 @@ if __name__ == "__main__":
     #    print("=== Running shot detection ===")
     #    run_hit_detection(match_dir)
 
+    # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
-    run_hit_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
+    #run_hit_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
 
