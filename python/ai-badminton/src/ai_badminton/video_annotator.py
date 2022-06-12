@@ -139,11 +139,12 @@ def annotate_video_3d(cap,
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     import tqdm.auto as tq
 
-    L = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    L = min(int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), trajectory3d.values.shape[0])
+    print(L)
     if frame_limit:
         L = frame_limit
  
-    xyz = trajectory3d.values[:, 2:]
+    xyz = trajectory3d.values[:, 1:]
     for i in tq.tqdm(range(L)):
         ret, frame = cap.read()
         frame = court3d.draw_lines(frame)
