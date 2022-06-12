@@ -183,3 +183,6 @@ def read_court(filename):
 
 def court_points_to_corners(pts):
     return [pts[1], pts[2], pts[0], pts[3]]
+
+def court_points_to_corners_and_poles(pts):
+    return [pts[1], pts[2], pts[0], pts[3]], [pts[4], pts[5]]

@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 from tensorflow.python.keras.saving import hdf5_format
 import h5py
 from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Input, Reshape, Bidirectional, GRU, GlobalMaxPool1D, Dense, Softmax
+from tensorflow.keras.models import Model
+
+from pathlib import Path
 
 from .pose import Pose
 
@@ -99,6 +103,7 @@ class AdhocHitDetector(HitDetector):
 
 def scale_data(x):
     x = np.array(x)
+    eps = 1E-3
     def scale_by_col(x, cols):
         x_ = np.array(x[:, cols])
         idx = np.abs(x_) < eps
@@ -115,13 +120,31 @@ def scale_data(x):
 
 class MLHitDetector(HitDetector):
 
+    @staticmethod
+    def create_model(feature_dim, num_consecutive_frames):
+        input_layer = Input(shape=(feature_dim,))
+        X = input_layer
+        X = Reshape(
+            target_shape=(num_consecutive_frames, feature_dim // num_consecutive_frames))(X)
+        # Two layers of bidirectional grus
+        X = Bidirectional(GRU(64, return_sequences=True))(X)
+        X = Bidirectional(GRU(64, return_sequences=True))(X)
+        X = GlobalMaxPool1D()(X)
+        X = Dense(3)(X)
+        X = Softmax()(X)
+        output_layer = X
+        model = Model(input_layer, output_layer)
+        return model
 
     def __init__(self, court, poses, trajectory, model_path):
         super().__init__(court, poses, trajectory)
 
         with h5py.File(model_path, mode='r') as f:
             self.temperature = f.attrs['temperature']
-            self.model = hdf5_format.load_model_from_hdf5(f)
+            #self.model = hdf5_format.load_model_from_hdf5(f)
+            #self.model = MLHitDetector.create_model(2418, 31) # 31-13-13
+            self.model = MLHitDetector.create_model(936, 12) # 12-6-0
+            self.model.load_weights(model_path)
 
         import tensorflow.keras.backend as K
 
@@ -220,3 +243,12 @@ class MLHitDetector(HitDetector):
         plt.hist(np.diff(result))
         print('Average time between shots (s):', np.average(np.diff(result)) / fps)
         return result, is_hit
+
+def read_hits(hit_prediction_path):
+
+    assert hit_prediction_path.is_file(), f"Invalid path for hit prediction: {hit_prediction_path}"
+
+    hits = pd.read_csv(str(hit_prediction_path)).values
+
+    compressed_hits = np.compress(hits[:,1] != 0, hits, axis=0)
+    return list(compressed_hits[:,0]), list(compressed_hits[:,1])

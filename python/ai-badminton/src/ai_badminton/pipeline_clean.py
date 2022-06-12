@@ -45,7 +45,7 @@ DET_CHECKPOINT = f"{MODEL_PATH}/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pt
 POSE_CHECKPOINT = f"{MODEL_PATH}/hrnet_w48_coco_256x192-b9e0b3ab_20200708.pth"
 
 SHUTTLE_TRACKING_MODEL = f"{MODEL_PATH}/model906_30"
-HIT_DETECTION_MODEL = f"{MODEL_PATH}/hitnet_conv_model_predict_direction.h5"
+HIT_DETECTION_MODEL = f"{MODEL_PATH}/hitnet_conv_model_predict_direction-12-6-0.h5"
 
 COURT_DETECTION_BIN = f"{CODE_BASE_PATH}/tennis-court-detection/build/bin/detect"
 
@@ -314,6 +314,8 @@ def run_hit_detection_inference(video_path, trajectory, poses, court, hit_detect
     )
     fps = cap.get(cv2.CAP_PROP_FPS)
     result, is_hit = detector.detect_hits(fps)
+    print("result = \n", result, len(result))
+    print("is_hit = \n", is_hit, len(is_hit))
 
     # Write hit to csv file
     L = len(trajectory.X)
@@ -324,7 +326,8 @@ def run_hit_detection_inference(video_path, trajectory, poses, court, hit_detect
 
     data = {'frame' : frames, 'hit' : hits}
     df = pd.DataFrame(data=data)
-    df.to_csv(str(output_path))
+    print(df)
+    df.to_csv(str(output_path), index=False)
 
 def run_hit_detection(match_path):
 
@@ -354,13 +357,13 @@ def run_hit_detection(match_path):
 
         run_hit_detection_inference(video_path, trajectory, poses, court, HIT_DETECTION_MODEL,
                                     output_path)
-        break
+        break # FIXME debug
 
 if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
 
-    # training data
+    ## training data
     #for match_idx in range(1, 23):
     #    print(f"\n\nComputing ML data for match_{match_idx}")
 
@@ -369,26 +372,39 @@ if __name__ == "__main__":
     #    #print("=== Running pose detection ===")
     #    #run_pose_detection_on_match(match_dir)
 
-    #    #print("=== Running pose postprocessing ===")
-    #    #run_pose_postprocessing(match_dir)
-
     #    #print("=== Running court detection ===")
     #    #run_court_detection_on_match(match_dir)
+
+    #    #print("=== Running pose postprocessing ===")
+    #    #run_pose_postprocessing(match_dir)
 
     #    print("=== Running shuttle detection ===")
     #    run_shuttle_detection(match_dir)
 
-    # validation data
+    #    print("=== Running shot detection ===")
+    #    run_hit_detection(match_dir)
+
+
+    ## validation data
     #for match_idx in range(1, 4):
     #    print(f"\n\nComputing ML data for test_match_{match_idx}")
 
     #    match_dir = base_dir / f"test_match{match_idx}"
-    #    print("=== Running pose detection ===")
-    #    run_pose_detection_on_match(match_dir)
-    #    print("=== Running court detection ===")
-    #    run_court_detection_on_match(match_dir)
-    #    print("=== Running pose postprocessing ===")
-    #    run_pose_postprocessing(match_dir)
+
+    #    #print("=== Running pose detection ===")
+    #    #run_pose_detection_on_match(match_dir)
+
+    #    #print("=== Running court detection ===")
+    #    #run_court_detection_on_match(match_dir)
+
+    #    #print("=== Running pose postprocessing ===")
+    #    #run_pose_postprocessing(match_dir)
+
+    #    print("=== Running shuttle detection ===")
+    #    run_shuttle_detection(match_dir)
+
+    #    print("=== Running shot detection ===")
+    #    run_hit_detection(match_dir)
 
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
     run_hit_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
