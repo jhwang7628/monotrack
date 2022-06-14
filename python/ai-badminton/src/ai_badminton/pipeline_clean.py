@@ -303,7 +303,7 @@ def run_shuttle_detection(match_dir):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         tracknet_inference(video_path, SHUTTLE_TRACKING_MODEL, output_path)
 
-def read_poses_court_trajectory(match_path, video_name):
+def read_poses_court_trajectory(match_path, video_name, read_predicted_trajectory=True):
     poses = read_player_poses(str(match_path / "poses" / video_name))
 
     court_pts = read_court(str(match_path / "court" / (video_name + ".out")))
@@ -311,7 +311,12 @@ def read_poses_court_trajectory(match_path, video_name):
     court = Court(corners = court_corners)
     court3d = Court3D(court_corners, pole_tips)
 
-    trajectory = Trajectory(str(match_path / "ball_trajectory" / (str(video_name) + "_ball_predict.csv")))
+    if read_predicted_trajectory:
+        trajectory_path = match_path / "ball_trajectory" / (str(video_name) + "_ball_predict.csv")
+    else:
+        trajectory_path = match_path / "ball_trajectory" / (str(video_name) + "_ball.csv")
+    assert trajectory_path.is_file()
+    trajectory = Trajectory(str(trajectory_path))
 
     return {
         "poses": poses,
@@ -349,7 +354,7 @@ def run_hit_detection_inference(video_path, trajectory, poses, court, hit_detect
     print(df)
     df.to_csv(str(output_path), index=False)
 
-def run_hit_detection(match_path):
+def run_hit_detection(match_path, use_predicted_hits_trajectory=True):
 
     assert Path(HIT_DETECTION_MODEL).is_file()
 
@@ -367,9 +372,12 @@ def run_hit_detection(match_path):
 
         print(f"Processing video for hit detection: {video_name}")
 
-        metadata = read_poses_court_trajectory(match_path, video_name)
+        metadata = read_poses_court_trajectory(match_path, video_name, use_predicted_hits_trajectory)
 
-        output_path = hit_output / (video_path.stem + "_hit_predict.csv")
+        if use_predicted_hits_trajectory:
+            output_path = hit_output / (video_path.stem + "_hit_predict.csv")
+        else:
+            output_path = hit_output / (video_path.stem + "_hit_predict_bootstraped.csv")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         run_hit_detection_inference(video_path,
@@ -379,7 +387,7 @@ def run_hit_detection(match_path):
                                     HIT_DETECTION_MODEL,
                                     output_path)
 
-def run_3d_trajectory_reconstruction(match_path):
+def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=True):
 
     rally_dir = match_path / "rally_video"
     assert rally_dir.is_dir()
@@ -392,9 +400,12 @@ def run_3d_trajectory_reconstruction(match_path):
 
         print(f"Processing video for 3d trajectory reconstruction: {video_name}")
 
-        metadata = read_poses_court_trajectory(match_path, video_name)
+        metadata = read_poses_court_trajectory(match_path, video_name, use_predicted_hits_trajectory)
 
-        hits_path = match_path / "shot" / (video_name + "_hit_predict.csv")
+        if use_predicted_hits_trajectory:
+            hits_path = match_path / "shot" / (video_name + "_hit_predict.csv")
+        else:
+            hits_path = match_path / "shot" / (video_name + "_hit.csv")
         assert hits_path.is_file(), f"Hits file does not exist: {hits_path}"
         hits_data = pd.read_csv(str(hits_path))
 
@@ -411,7 +422,10 @@ def run_3d_trajectory_reconstruction(match_path):
         results = reconstructor.reconstruct(fps)
 
         # write results
-        output_path = match_path / "ball_trajectory_3d" / (video_name + "_3d.csv")
+        if use_predicted_hits_trajectory:
+            output_path = match_path / "ball_trajectory_3d" / (video_name + "_3d.csv")
+        else:
+            output_path = match_path / "ball_trajectory_3d_bootstraped" / (video_name + "_3d.csv")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         N_frames = min(len(metadata["trajectory2d"].X), results.shape[0])
         data = {
@@ -448,34 +462,34 @@ if __name__ == "__main__":
         #run_hit_detection(match_dir)
 
         print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir)
+        run_3d_trajectory_reconstruction(match_dir, True)
 
-    ## validation data
-    for match_idx in range(1, 4):
-        print(f"\n\nComputing ML data for test_match_{match_idx}")
+    ### validation data
+    #for match_idx in range(1, 4):
+    #    print(f"\n\nComputing ML data for test_match_{match_idx}")
 
-        match_dir = base_dir / f"test_match{match_idx}"
+    #    match_dir = base_dir / f"test_match{match_idx}"
 
-        #print("=== Running pose detection ===")
-        #run_pose_detection_on_match(match_dir)
+    #    #print("=== Running pose detection ===")
+    #    #run_pose_detection_on_match(match_dir)
 
-        #print("=== Running court detection ===")
-        #run_court_detection_on_match(match_dir)
+    #    #print("=== Running court detection ===")
+    #    #run_court_detection_on_match(match_dir)
 
-        #print("=== Running pose postprocessing ===")
-        #run_pose_postprocessing(match_dir)
+    #    #print("=== Running pose postprocessing ===")
+    #    #run_pose_postprocessing(match_dir)
 
-        #print("=== Running shuttle detection ===")
-        #run_shuttle_detection(match_dir)
+    #    #print("=== Running shuttle detection ===")
+    #    #run_shuttle_detection(match_dir)
 
-        #print("=== Running shot detection ===")
-        #run_hit_detection(match_dir)
+    #    #print("=== Running shot detection ===")
+    #    #run_hit_detection(match_dir)
 
-        print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir)
+    #    print("=== Running 3D reconstruction ===")
+    #    run_3d_trajectory_reconstruction(match_dir, False)
 
     # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
     #run_hit_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
-    #run_3d_trajectory_reconstruction(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
+    #run_3d_trajectory_reconstruction(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1"))
 
