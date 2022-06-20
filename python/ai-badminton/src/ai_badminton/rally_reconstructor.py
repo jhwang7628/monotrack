@@ -95,9 +95,10 @@ class RallyReconstructor:
         initg = np.concatenate([xg, vg, np.array([Cg])])
         bounds = [(0, 6.1), (0, 13.4), (0.1, 6)] + [(-150, 150)] * 3 +  [(0, 0.4)]
 
-#         bounds = [(0, 6.1), (0, 13.4 / 2), (0.1, 6)] + [(-150, 150)] * 3 +  [(0, 0.4)]
-#         if s2d[1] > 13.4 / 2:
-#             bounds[1] = (13.4 / 2, 13.4)
+        bounds = [(0, 6.1), (0, 13.4 / 2), (0.1, 6)] + [(-150, 150)] + [(0, 150)] + [(-150, 150)] +  [(0, 0.4)]
+        if s2d[1] > 13.4 / 2:
+            bounds[1] = (13.4 / 2, 13.4)
+            bounds[4] = (-150, 0)
 
         camProj = self.court3d.camProj
         norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)
@@ -167,7 +168,7 @@ class RallyReconstructor:
         est_traj = np.array(get_trajectory(res.x))
         return est_traj
 
-    def reconstruct(self, fps):
+    def reconstruct(self, fps, recon_first=False):
         fr_adjust = 30. / fps
 
         def get_location(player_id, frame_id):
@@ -184,9 +185,6 @@ class RallyReconstructor:
         hit_frame = [(i, x) for i, x in enumerate(self.hits.hit) if x > 0]
         if hit_frame[0][0] != 0:
             hit_frame = [(0, 3-hit_frame[0][1])] + hit_frame
-        # adding the last frame to the hit to make sure it is reconstructed
-        swap_player_idx = lambda x: (x%2) + 1 # swap (1,2) for player idx
-        hit_frame.append((len(self.hits.hit)-1, swap_player_idx(hit_frame[-1][1])))
 
         s3d = None
         all_traj = []
@@ -198,10 +196,12 @@ class RallyReconstructor:
             traj = self.reconstruct_one_hit(s2d, e2d, [st[0], en[0]], s3d, fps, fr_adjust)
             last_pt = self.court3d.project_uv(traj[-1])
             last_pix = np.array([self.trajectory.X[en[0]], self.trajectory.Y[en[0]]])
-            if np.linalg.norm(last_pt - last_pix) < 50:
+            if np.linalg.norm(last_pt - last_pix) < 40 and (recon_first or i != 0):
                 s3d = traj[-1]
             else:
                 s3d = None
             all_traj.append(traj[:-1])
         all_traj = np.vstack(all_traj)
+        if not recon_first:
+            all_traj[0:hit_frame[1][0]] = -1
         return all_traj

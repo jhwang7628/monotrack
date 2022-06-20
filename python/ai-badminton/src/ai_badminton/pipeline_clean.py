@@ -331,14 +331,15 @@ def run_hit_detection_inference(video_path, trajectory, poses, court, hit_detect
     cap = cv2.VideoCapture(str(video_path))
     assert cap.isOpened(), "Error opening video stream or file"
 
+    fps = cap.get(cv2.CAP_PROP_FPS)
     detector = MLHitDetector(
         court,
         poses,
         trajectory,
-        hit_detection_model
+        hit_detection_model,
+        fps=fps
     )
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    result, is_hit = detector.detect_hits(fps)
+    result, is_hit = detector.detect_hits()
     print("result = \n", result, len(result))
     print("is_hit = \n", is_hit, len(is_hit))
 
@@ -419,7 +420,8 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
             metadata["trajectory2d"],
             hits_data
         )
-        results = reconstructor.reconstruct(fps)
+        reconstruct_first_shot = True
+        results = reconstructor.reconstruct(fps, reconstruct_first_shot)
 
         # write results
         if use_predicted_hits_trajectory:
@@ -440,6 +442,8 @@ if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
 
+    match_idx = [2, 3]
+
     ## training data
     for match_idx in range(1, 23):
         print(f"\n\nComputing ML data for match_{match_idx}")
@@ -458,8 +462,8 @@ if __name__ == "__main__":
         #print("=== Running shuttle detection ===")
         #run_shuttle_detection(match_dir)
 
-        #print("=== Running shot detection ===")
-        #run_hit_detection(match_dir)
+        print("=== Running shot detection ===")
+        run_hit_detection(match_dir)
 
         print("=== Running 3D reconstruction ===")
         run_3d_trajectory_reconstruction(match_dir, True)
