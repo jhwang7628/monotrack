@@ -2,6 +2,8 @@ from .pose import Pose
 
 import numpy as np
 
+from pathlib import Path
+
 '''
 Input:
     - trajectory of the shots
@@ -11,7 +13,7 @@ Input:
 def generate_sequence(court, traj, poses, hits):
     Xb, Yb = traj.X, traj.Y
     hit_frame, who_hit = hits[0], hits[1]
-        
+
     def get_position(pose, x, y):
         cp = np.array([x, y])
         lp, rp = pose.kp[15], pose.kp[16]
@@ -20,7 +22,7 @@ def generate_sequence(court, traj, poses, hits):
         else:
             hit_pos = court.pixel_to_court(rp)
         return hit_pos
-        
+
     positions = []
     for fid, hid in zip(hit_frame, who_hit):
         player_poses = []
@@ -30,7 +32,7 @@ def generate_sequence(court, traj, poses, hits):
             pose = Pose()
             pose.init_from_kparray(xy)
             player_poses.append(pose)
-            
+
         if hid == 0:
             continue
         if hid <= 2:
@@ -58,7 +60,7 @@ def zone(pos):
         side = 1
         y = 1-y
         x = 1-x
-        
+
     y_id = -1
     if 0 <= y < 0.35 / 2:
         y_id = 0
@@ -66,7 +68,7 @@ def zone(pos):
         y_id = 1
     else:
         y_id = 2
-    
+
     x_id = 0 if x <= 0.5 else 1
     zone_id = 2 * y_id + x_id + 6 * side
     return zone_id
@@ -75,7 +77,7 @@ def zone(pos):
 Ideally, this should filter should:
     - Be associated with a database of shot sequences
     - Support adding locations to the filter
-    - Our application should support progressively adding more shots as well as 
+    - Our application should support progressively adding more shots as well as
       choosing a sequence and constantly updating it.
 '''
 class ShotFilter(object):
@@ -90,9 +92,9 @@ class ShotFilter(object):
                 continue
             if zone(pos) == zone(seq[2][L][1]):
                 filtered.append(seq)
-                
+
         self.search_seq.append(pos)
         self.result = filtered
-    
+
     def get_sequences(self):
         return self.result

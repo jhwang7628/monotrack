@@ -251,4 +251,7 @@ def read_hits(hit_prediction_path):
     hits = pd.read_csv(str(hit_prediction_path)).values
 
     compressed_hits = np.compress(hits[:,1] != 0, hits, axis=0)
-    return list(compressed_hits[:,0]), list(compressed_hits[:,1])
+    return {
+        "frames": list(compressed_hits[:,0]),
+        "player_ids": list(compressed_hits[:,1])
+    }

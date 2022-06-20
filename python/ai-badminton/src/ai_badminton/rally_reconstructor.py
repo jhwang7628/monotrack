@@ -187,7 +187,6 @@ class RallyReconstructor:
         # adding the last frame to the hit to make sure it is reconstructed
         swap_player_idx = lambda x: (x%2) + 1 # swap (1,2) for player idx
         hit_frame.append((len(self.hits.hit)-1, swap_player_idx(hit_frame[-1][1])))
-        print(hit_frame) #FIXME debug
 
         s3d = None
         all_traj = []

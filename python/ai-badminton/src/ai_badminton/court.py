@@ -88,6 +88,9 @@ class Court:
         x = self.inv_H @ np.array([p[0], p[1], 1])
         return x[:2] / x[2]
 
+    def unnormalize_court_position(self, p):
+        return np.array([p[0]*6.1, p[1]*13.41, 0])
+
     def in_court(self, p, slack=0):
         # 0 if not in court, 1 if in upper half, 2 if in lower half
         x = self.pixel_to_court(p)

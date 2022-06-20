@@ -124,6 +124,16 @@ def read_player_poses(input_prefix):
     poses = [bottom_player, top_player]
     return poses
 
+def get_player_poses_frame(read_poses, frame):
+    get_kparray = lambda x: x.iloc[frame].to_list()
+    poses = {
+        "bottom": Pose(),
+        "top": Pose()
+    }
+    poses["bottom"].init_from_kparray(get_kparray(read_poses[0]))
+    poses["top"].init_from_kparray(get_kparray(read_poses[1]))
+    return poses
+
 '''
 Processes the raw text pose output from the pose estimation scripts.
 '''
