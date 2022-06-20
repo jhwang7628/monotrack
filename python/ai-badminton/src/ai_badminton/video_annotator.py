@@ -146,6 +146,8 @@ def annotate_video_3d(cap,
  
     xyz = trajectory3d.values[:, 1:]
     for i in tq.tqdm(range(L)):
+        if (xyz[i] == np.array([-1, -1, -1])).all() or xyz[i][2] < 0:
+            continue
         ret, frame = cap.read()
         frame = court3d.draw_lines(frame)
         P = court3d.project_uv(xyz[i])

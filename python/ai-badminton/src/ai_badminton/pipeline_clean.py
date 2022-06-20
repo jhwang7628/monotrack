@@ -316,7 +316,7 @@ def read_poses_court_trajectory(match_path, video_name, read_predicted_trajector
     else:
         trajectory_path = match_path / "ball_trajectory" / (str(video_name) + "_ball.csv")
     assert trajectory_path.is_file()
-    trajectory = Trajectory(str(trajectory_path))
+    trajectory = Trajectory(str(trajectory_path), interp=True)
 
     return {
         "poses": poses,
@@ -442,9 +442,7 @@ if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
 
-    match_idx = [2, 3]
-
-    ## training data
+    # training data
     for match_idx in range(1, 23):
         print(f"\n\nComputing ML data for match_{match_idx}")
 
@@ -463,34 +461,34 @@ if __name__ == "__main__":
         #run_shuttle_detection(match_dir)
 
         print("=== Running shot detection ===")
-        run_hit_detection(match_dir)
+        run_hit_detection(match_dir, True)
 
         print("=== Running 3D reconstruction ===")
         run_3d_trajectory_reconstruction(match_dir, True)
 
     ### validation data
-    #for match_idx in range(1, 4):
-    #    print(f"\n\nComputing ML data for test_match_{match_idx}")
+    for match_idx in range(1, 4):
+        print(f"\n\nComputing ML data for test_match_{match_idx}")
 
-    #    match_dir = base_dir / f"test_match{match_idx}"
+        match_dir = base_dir / f"test_match{match_idx}"
 
-    #    #print("=== Running pose detection ===")
-    #    #run_pose_detection_on_match(match_dir)
+        #print("=== Running pose detection ===")
+        #run_pose_detection_on_match(match_dir)
 
-    #    #print("=== Running court detection ===")
-    #    #run_court_detection_on_match(match_dir)
+        #print("=== Running court detection ===")
+        #run_court_detection_on_match(match_dir)
 
-    #    #print("=== Running pose postprocessing ===")
-    #    #run_pose_postprocessing(match_dir)
+        #print("=== Running pose postprocessing ===")
+        #run_pose_postprocessing(match_dir)
 
-    #    #print("=== Running shuttle detection ===")
-    #    #run_shuttle_detection(match_dir)
+        #print("=== Running shuttle detection ===")
+        #run_shuttle_detection(match_dir)
 
-    #    #print("=== Running shot detection ===")
-    #    #run_hit_detection(match_dir)
+        print("=== Running shot detection ===")
+        run_hit_detection(match_dir, True)
 
-    #    print("=== Running 3D reconstruction ===")
-    #    run_3d_trajectory_reconstruction(match_dir, False)
+        print("=== Running 3D reconstruction ===")
+        run_3d_trajectory_reconstruction(match_dir, True)
 
     # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
