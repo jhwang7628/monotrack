@@ -461,10 +461,10 @@ if __name__ == "__main__":
         #run_shuttle_detection(match_dir)
 
         print("=== Running shot detection ===")
-        run_hit_detection(match_dir, True)
+        run_hit_detection(match_dir, False)
 
         print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir, True)
+        run_3d_trajectory_reconstruction(match_dir, False)
 
     ### validation data
     for match_idx in range(1, 4):
@@ -485,10 +485,10 @@ if __name__ == "__main__":
         #run_shuttle_detection(match_dir)
 
         print("=== Running shot detection ===")
-        run_hit_detection(match_dir, True)
+        run_hit_detection(match_dir, False)
 
         print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir, True)
+        run_3d_trajectory_reconstruction(match_dir, False)
 
     # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
