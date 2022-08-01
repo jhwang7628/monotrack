@@ -409,6 +409,7 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
             hits_path = match_path / "shot" / (video_name + "_hit.csv")
         assert hits_path.is_file(), f"Hits file does not exist: {hits_path}"
         hits_data = pd.read_csv(str(hits_path))
+        print(hits_data) # FIXME debug
 
         cap = cv2.VideoCapture(str(video_path))
         assert cap.isOpened(), f"Cannot open video: {video_path}"
@@ -443,32 +444,37 @@ if __name__ == "__main__":
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
 
     # training data
-    for match_idx in range(1, 23):
-        print(f"\n\nComputing ML data for match_{match_idx}")
-
-        match_dir = base_dir / f"match{match_idx}"
-
-        #print("=== Running pose detection ===")
-        #run_pose_detection_on_match(match_dir)
-
-        #print("=== Running court detection ===")
-        #run_court_detection_on_match(match_dir)
-
-        #print("=== Running pose postprocessing ===")
-        #run_pose_postprocessing(match_dir)
-
-        #print("=== Running shuttle detection ===")
-        #run_shuttle_detection(match_dir)
-
-        print("=== Running shot detection ===")
-        run_hit_detection(match_dir, False)
-
-        print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir, False)
+    #for match_idx in range(1, 23):
+    #    print(f"\n\nComputing ML data for match_{match_idx}")
+#
+    #    match_dir = base_dir / f"match{match_idx}"
+#
+    #    #print("=== Running pose detection ===")
+    #    #run_pose_detection_on_match(match_dir)
+#
+    #    #print("=== Running court detection ===")
+    #    #run_court_detection_on_match(match_dir)
+#
+    #    #print("=== Running pose postprocessing ===")
+    #    #run_pose_postprocessing(match_dir)
+#
+    #    #print("=== Running shuttle detection ===")
+    #    #run_shuttle_detection(match_dir)
+#
+    #    print("=== Running shot detection ===")
+    #    run_hit_detection(match_dir, False)
+#
+    #    print("=== Running 3D reconstruction ===")
+    #    run_3d_trajectory_reconstruction(match_dir, False)
 
     ### validation data
     for match_idx in range(1, 4):
         print(f"\n\nComputing ML data for test_match_{match_idx}")
+        
+        # FIXME debug START
+        if match_idx != 3:
+            continue
+        # FIXME debug END
 
         match_dir = base_dir / f"test_match{match_idx}"
 
@@ -484,8 +490,8 @@ if __name__ == "__main__":
         #print("=== Running shuttle detection ===")
         #run_shuttle_detection(match_dir)
 
-        print("=== Running shot detection ===")
-        run_hit_detection(match_dir, False)
+        #print("=== Running shot detection ===")
+        #run_hit_detection(match_dir, False)
 
         print("=== Running 3D reconstruction ===")
         run_3d_trajectory_reconstruction(match_dir, False)

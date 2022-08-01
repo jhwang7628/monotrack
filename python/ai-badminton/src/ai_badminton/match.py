@@ -72,7 +72,7 @@ def create_match_summary(match_path, output_path):
             # get trajectory slices
             trajectory = all_trajectories.loc[start_frame_idx:end_frame_idx,"ball_x":"ball_z"].values
             trajectory_y_relative = trajectory[:,1] - 6.71
-            if trajectory_y_relative[0]*trajectory_y_relative[-1]:
+            if len(trajectory_y_relative) >= 1 and trajectory_y_relative[0]*trajectory_y_relative[-1]:
                 # if as expected trajectory ends on different sides, use the velocity vec when
                 # crossing the net to determine offensive versus defensive
                 idx = 0
@@ -119,7 +119,11 @@ def create_match_summary(match_path, output_path):
 
 if __name__ == "__main__":
     dataset_base_path = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/")
-    for match_idx in range(23):
-        match_path = dataset_base_path / f"match{match_idx}"
+    #for match_idx in range(23):
+    #    match_path = dataset_base_path / f"match{match_idx}"
+    #    if match_path.is_dir():
+    #        create_match_summary(match_path, match_path / "summary")
+    for match_idx in range(4):
+        match_path = dataset_base_path / f"test_match{match_idx}"
         if match_path.is_dir():
             create_match_summary(match_path, match_path / "summary")
