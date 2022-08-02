@@ -27,6 +27,7 @@ import numpy as np
 from pathlib import Path
 import subprocess
 import time
+import copy
 
 # TrackNet dependencies
 import sys
@@ -390,6 +391,44 @@ def run_hit_detection(match_path, use_predicted_hits_trajectory=True):
 
 def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=True):
 
+    def fix_gt_hits(hits_data, match_name, video_name):
+        # 1 is bottom player, 2 is top player, alternate since this will be hand labeled hit frames
+        ground_truth_start_hit_result = {
+            ("test_match3", "1_02_00") : 2,
+            ("test_match3", "1_03_02") : 1,
+            ("test_match3", "1_05_02") : 2,
+            ("test_match3", "1_05_03") : 2,
+            ("test_match3", "1_06_05") : 2,
+            ("test_match3", "1_06_06") : 2,
+            ("test_match3", "1_08_08") : 2,
+            ("test_match3", "1_08_09") : 2,
+            #("test_match3", "1_09_12") : 1, # no gt hit
+            ("test_match3", "1_09_15") : 1,
+            ("test_match3", "1_10_16") : 2,
+        }
+
+        key = (match_name, video_name)
+        if key in ground_truth_start_hit_result:
+            new_hits_data = copy.copy(hits_data)
+            start_hit_result = ground_truth_start_hit_result[key]
+            count = 0
+            for ii in range(new_hits_data.shape[0]):
+                print(ii, new_hits_data.at[ii, "hit"])
+                if new_hits_data.at[ii, "hit"] == 1:
+                    count += 1
+                    # if odd, use the result from start_hit_result
+                    if count % 2 == 1:
+                        new_hits_data.at[ii, "hit"] = start_hit_result
+                    else:
+                        new_hits_data.at[ii, "hit"] = (start_hit_result % 2) + 1
+            return new_hits_data
+        else:
+            print("**WARNING** ground truth hits label not exist. Using TrackNet data. This results in no player info in hits (and thus trajectories all being on same side")
+            return hits_data
+
+
+
+
     rally_dir = match_path / "rally_video"
     assert rally_dir.is_dir()
 
@@ -409,7 +448,8 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
             hits_path = match_path / "shot" / (video_name + "_hit.csv")
         assert hits_path.is_file(), f"Hits file does not exist: {hits_path}"
         hits_data = pd.read_csv(str(hits_path))
-        print(hits_data) # FIXME debug
+        if not use_predicted_hits_trajectory:
+            hits_data = fix_gt_hits(hits_data, match_path.stem, video_name)
 
         cap = cv2.VideoCapture(str(video_path))
         assert cap.isOpened(), f"Cannot open video: {video_path}"
@@ -470,7 +510,7 @@ if __name__ == "__main__":
     ### validation data
     for match_idx in range(1, 4):
         print(f"\n\nComputing ML data for test_match_{match_idx}")
-        
+
         # FIXME debug START
         if match_idx != 3:
             continue

@@ -52,9 +52,10 @@ def is_valid_trajectory(traj):
 
 dataset_root = Path("/home/juiwang/data/ai-badminton/dataset/profession_dataset")
 
-match_path = dataset_root / "match1"
+match_path = dataset_root / "test_match3"
 
-rallies = [x.stem for x in sorted((dataset_root / "match1" / "rally_video").glob("*.mp4"))]
+rallies = [x.stem for x in sorted((match_path / "rally_video").glob("*.mp4"))]
+rallies = ["1_02_00"]
 
 fig = plt.figure()
 ax = plt.axes(projection="3d")
