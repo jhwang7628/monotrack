@@ -1,4 +1,4 @@
-from ai_badminton.hit_detector import read_hits
+from ai_badminton.hit_detector import read_hits, read_point_won
 from ai_badminton.video_utils import read_video_assert, get_fps, get_total_num_frames
 from ai_badminton.court import Court, read_court, court_points_to_corners
 from ai_badminton.pose import get_player_poses_frame, read_player_poses
@@ -14,13 +14,14 @@ PLAYER_ID_MAPPING = {
     2: "top"
 }
 
-def create_match_summary(match_path, output_path):
-
-    output_path.mkdir(parents=True, exist_ok=True)
+def create_match_summary(match_path, use_predicted_labels=True):
 
     rally_video_path = match_path / "rally_video"
 
     for video_path in rally_video_path.iterdir():
+        
+        if video_path.suffix != ".mp4":
+            continue
 
         rally_name = video_path.stem
         print(f"Processing rally {rally_name} in match {match_path}")
@@ -29,7 +30,10 @@ def create_match_summary(match_path, output_path):
         fps = get_fps(cap)
         N_frames = get_total_num_frames(cap)
 
-        hit_path = match_path / "shot" / (rally_name + "_hit_predict.csv")
+        if use_predicted_labels:
+            hit_path = match_path / "shot" / (rally_name + "_hit_predict.csv")
+        else:
+            hit_path = match_path / "shot" / (rally_name + "_hit.csv")
         assert hit_path.is_file()
         hits = read_hits(hit_path)
         shot_count = len(hits["frames"])
@@ -39,7 +43,10 @@ def create_match_summary(match_path, output_path):
 
         all_poses = read_player_poses(str(match_path / "poses" / rally_name))
 
-        trajectories_3d_path = match_path / "ball_trajectory_3d" / (rally_name + "_3d.csv")
+        if use_predicted_labels:
+            trajectories_3d_path = match_path / "ball_trajectory_3d" / (rally_name + "_3d.csv")
+        else:
+            trajectories_3d_path = match_path / "ball_trajectory_3d_bootstraped" / (rally_name + "_3d.csv")
         all_trajectories = pd.read_csv(trajectories_3d_path)
 
         duration = (hits["frames"][-1] - hits["frames"][0]) / fps
@@ -102,12 +109,19 @@ def create_match_summary(match_path, output_path):
                 "tendency": tendency
             }
             shots.append(shot)
+        
+        point_won_path = match_path / "point_won" / f"{rally_name}.csv"
+        player_won = None
+        if point_won_path.is_file():
+            point_won_data = read_point_won(point_won_path)
+            player_won = PLAYER_ID_MAPPING[point_won_data["winner_player_id"]]
 
         rally = {
             "name": rally_name,
             "shotCount": shot_count,
             "duration": duration,
             "playerServe": PLAYER_ID_MAPPING[hits["player_ids"][0]],
+            "playerWin": player_won,
             "shots": shots
         }
 

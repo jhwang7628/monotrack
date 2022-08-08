@@ -1,8 +1,10 @@
 from ai_badminton.pose import process_pose_file, read_player_poses
 from ai_badminton.court import Court, read_court, court_points_to_corners, court_points_to_corners_and_poles
-from ai_badminton.hit_detector import MLHitDetector
+from ai_badminton.hit_detector import MLHitDetector, read_point_won, swap_player_label, reconstruct_raw_from_read_hits_data, read_hits
 from ai_badminton.trajectory import Trajectory
 from ai_badminton.rally_reconstructor import Court3D, RallyReconstructor
+from ai_badminton.match import create_match_summary
+from ai_badminton.video_utils import read_video_assert, frame_time_to_frame_index
 
 from mmpose.apis import (inference_top_down_pose_model, init_pose_model,
                          process_mmdet_results, vis_pose_result)
@@ -28,6 +30,7 @@ from pathlib import Path
 import subprocess
 import time
 import copy
+import json
 
 # TrackNet dependencies
 import sys
@@ -391,44 +394,6 @@ def run_hit_detection(match_path, use_predicted_hits_trajectory=True):
 
 def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=True):
 
-    def fix_gt_hits(hits_data, match_name, video_name):
-        # 1 is bottom player, 2 is top player, alternate since this will be hand labeled hit frames
-        ground_truth_start_hit_result = {
-            ("test_match3", "1_02_00") : 2,
-            ("test_match3", "1_03_02") : 1,
-            ("test_match3", "1_05_02") : 2,
-            ("test_match3", "1_05_03") : 2,
-            ("test_match3", "1_06_05") : 2,
-            ("test_match3", "1_06_06") : 2,
-            ("test_match3", "1_08_08") : 2,
-            ("test_match3", "1_08_09") : 2,
-            #("test_match3", "1_09_12") : 1, # no gt hit
-            ("test_match3", "1_09_15") : 1,
-            ("test_match3", "1_10_16") : 2,
-        }
-
-        key = (match_name, video_name)
-        if key in ground_truth_start_hit_result:
-            new_hits_data = copy.copy(hits_data)
-            start_hit_result = ground_truth_start_hit_result[key]
-            count = 0
-            for ii in range(new_hits_data.shape[0]):
-                print(ii, new_hits_data.at[ii, "hit"])
-                if new_hits_data.at[ii, "hit"] == 1:
-                    count += 1
-                    # if odd, use the result from start_hit_result
-                    if count % 2 == 1:
-                        new_hits_data.at[ii, "hit"] = start_hit_result
-                    else:
-                        new_hits_data.at[ii, "hit"] = (start_hit_result % 2) + 1
-            return new_hits_data
-        else:
-            print("**WARNING** ground truth hits label not exist. Using TrackNet data. This results in no player info in hits (and thus trajectories all being on same side")
-            return hits_data
-
-
-
-
     rally_dir = match_path / "rally_video"
     assert rally_dir.is_dir()
 
@@ -447,9 +412,20 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
         else:
             hits_path = match_path / "shot" / (video_name + "_hit.csv")
         assert hits_path.is_file(), f"Hits file does not exist: {hits_path}"
-        hits_data = pd.read_csv(str(hits_path))
-        if not use_predicted_hits_trajectory:
-            hits_data = fix_gt_hits(hits_data, match_path.stem, video_name)
+        
+        hits = read_hits(hits_path)
+        
+        # if the point won data exist, read it and augment the shots
+        point_won_path = match_path / "point_won" /  (video_name + ".csv")
+        point_won_data = None
+        if point_won_path.is_file():
+            point_won_data = read_point_won(point_won_path)
+       
+        hits_data = reconstruct_raw_from_read_hits_data(hits)
+        if point_won_data is not None:
+            print("before = ", hits_data.loc[point_won_data["frame"]])
+            hits_data.loc[point_won_data["frame"]]["hit"] = swap_player_label(hits["player_ids"][-1])
+            print("after  = ", hits_data.loc[point_won_data["frame"]])
 
         cap = cv2.VideoCapture(str(video_path))
         assert cap.isOpened(), f"Cannot open video: {video_path}"
@@ -478,45 +454,60 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
             'ball_z' : results[:,2].tolist()
         }
         pd.DataFrame(data=data).to_csv(str(output_path), index=False)
+        
+def normalize_raw_point_won_data(match_path):
+    raw_path = match_path / "point_won" / "point_won_raw.csv"
+    if not raw_path.is_file():
+        print("**WARNING** No point won raw file. Do nothing.")
+        return
+   
+    header = []
+    with open(raw_path, "r") as stream:
+        stream.readline()
+        header = stream.readline().replace("# CSV_HEADER = ", "").strip("\n").split(",")
+    
+    raw_data = pd.read_csv(str(raw_path), skiprows=1, header=0, names=header) # skip the first two rows from VIA data
+    for idx, video_file in enumerate(raw_data["file_list"]):
+        video_name = video_file[2:-6]
+        video_path = match_path / "rally_video" / f"{video_name}.mp4"
+        if not video_path.is_file():
+            continue
+        start_time = raw_data["temporal_segment_start"][idx]
+        start_frame_index = frame_time_to_frame_index(read_video_assert(video_path), start_time)
+        metadata = json.loads(raw_data["metadata"][idx])
+        assert "TEMPORAL-SEGMENTS" in metadata.keys()
+        label = metadata["TEMPORAL-SEGMENTS"]
+        print(video_name, start_time, start_frame_index, label)
+        if label == "bottom win":
+            winner_player_id = 1
+        elif label == "top win":
+            winner_player_id = 2
+        else:
+            assert False, f"Winner label not recognized: {label}"
+        
+        output_path = match_path / "point_won" / f"{video_name}.csv"
+        with open(output_path, "w") as stream:
+            stream.write("time,frame,winner_player_id\n",)
+            stream.write(f"{start_time},{start_frame_index},{winner_player_id}")
 
 if __name__ == "__main__":
 
     base_dir = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset")
-
-    # training data
+    
+    match_dirs = []
+    ## training data
     #for match_idx in range(1, 23):
-    #    print(f"\n\nComputing ML data for match_{match_idx}")
-#
-    #    match_dir = base_dir / f"match{match_idx}"
-#
-    #    #print("=== Running pose detection ===")
-    #    #run_pose_detection_on_match(match_dir)
-#
-    #    #print("=== Running court detection ===")
-    #    #run_court_detection_on_match(match_dir)
-#
-    #    #print("=== Running pose postprocessing ===")
-    #    #run_pose_postprocessing(match_dir)
-#
-    #    #print("=== Running shuttle detection ===")
-    #    #run_shuttle_detection(match_dir)
-#
-    #    print("=== Running shot detection ===")
-    #    run_hit_detection(match_dir, False)
-#
-    #    print("=== Running 3D reconstruction ===")
-    #    run_3d_trajectory_reconstruction(match_dir, False)
-
-    ### validation data
+    #    match_dirs.append(base_dir / f"match{match_idx}")
+    # testing data
     for match_idx in range(1, 4):
-        print(f"\n\nComputing ML data for test_match_{match_idx}")
-
         # FIXME debug START
         if match_idx != 3:
             continue
         # FIXME debug END
-
-        match_dir = base_dir / f"test_match{match_idx}"
+        match_dirs.append(base_dir / f"test_match{match_idx}")
+    
+    for match_dir in match_dirs:
+        print(f"\n\nComputing ML data for match: {match_dir}")
 
         #print("=== Running pose detection ===")
         #run_pose_detection_on_match(match_dir)
@@ -532,9 +523,15 @@ if __name__ == "__main__":
 
         #print("=== Running shot detection ===")
         #run_hit_detection(match_dir, False)
+        
+        #print("=== Running Point won analysis ===")
+        #normalize_raw_point_won_data(match_dir)
 
-        print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir, False)
+        #print("=== Running 3D reconstruction ===")
+        #run_3d_trajectory_reconstruction(match_dir, False)
+        
+        print("=== Running match summary analysis ===")
+        create_match_summary(match_dir, use_predicted_labels=False)
 
     # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))

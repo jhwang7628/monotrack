@@ -190,6 +190,7 @@ class RallyReconstructor:
         all_traj = []
         for i in tqdm.tqdm(range(len(hit_frame) - 1)):
             st, en = hit_frame[i], hit_frame[i+1]
+            tqdm.write(f"  reconstructing shot between frame {st[0]} and frame{en[0]}")
             s2d = get_location(st[1], st[0])
             e2d = get_location(en[1], en[0])
 

@@ -9,6 +9,7 @@ from tensorflow.keras.layers import Input, Reshape, Bidirectional, GRU, GlobalMa
 from tensorflow.keras.models import Model
 
 from pathlib import Path
+import copy
 
 from .pose import Pose
 
@@ -62,7 +63,7 @@ class AdhocHitDetector(HitDetector):
 
     def detect_hits(self, fps=25):
         Xb, Yb = self.trajectory.X, self.trajectory.Y
-        result = self._detect_hits(Xb, Yb)
+        result = self._detect_hits_1d(Xb, Yb)
 
         # Filter hits by pose
         is_hit = []
@@ -116,6 +117,15 @@ def scale_data(x):
     x = scale_by_col(x, even_cols)
     x = scale_by_col(x, odd_cols)
     return x
+
+def swap_player_label(label):
+    """
+    Swapping the player label.
+    
+    1 represents bottom player and 2 represents top player. This helper function swaps bottom/top from top/bottom.
+    """
+    assert label == 1 or label == 2
+    return (label % 2) + 1
 
 class MLHitDetector(HitDetector):
     @staticmethod
@@ -316,15 +326,78 @@ class MLHitDetector(HitDetector):
             plt.hist(np.diff(result))
             print('Average time between shots (s):', np.average(np.diff(result)) / self.fps)
         return result, is_hit
+    
+# 1 is bottom player, 2 is top player, alternate since this will be hand labeled hit frames
+GROUND_TRUTH_START_HIT_RESULT = {
+    ("test_match3", "1_02_00") : 2,
+    ("test_match3", "1_03_02") : 1,
+    ("test_match3", "1_05_02") : 2,
+    ("test_match3", "1_05_03") : 2,
+    ("test_match3", "1_06_05") : 2,
+    ("test_match3", "1_06_06") : 2,
+    ("test_match3", "1_08_08") : 2,
+    ("test_match3", "1_08_09") : 2,
+    #("test_match3", "1_09_12") : 1, # no gt hit
+    ("test_match3", "1_09_15") : 1,
+    ("test_match3", "1_10_16") : 2,
+}
+
+def _fix_gt_hits_csv(hits_data, match_name, video_name):
+    key = (match_name, video_name)
+    if key in GROUND_TRUTH_START_HIT_RESULT:
+        new_hits_data = copy.copy(hits_data)
+        start_hit_result = GROUND_TRUTH_START_HIT_RESULT[key]
+        count = 0
+        for ii in range(new_hits_data.shape[0]):
+            if new_hits_data.at[ii, "hit"] == 1:
+                count += 1
+                # if odd, use the result from start_hit_result
+                if count % 2 == 1:
+                    new_hits_data.at[ii, "hit"] = start_hit_result
+                else:
+                    new_hits_data.at[ii, "hit"] = swap_player_label(start_hit_result)
+        return new_hits_data
+    else:
+        print("**WARNING** ground truth hits label not exist. Using TrackNet data. This results in no player info in hits (and thus trajectories all being on same side")
+        return hits_data
 
 def read_hits(hit_prediction_path):
-
+    # NOTE: this path needs to be abs otherwise the match_name extraction might fail
     assert hit_prediction_path.is_file(), f"Invalid path for hit prediction: {hit_prediction_path}"
+    
+    hits = pd.read_csv(str(hit_prediction_path))
+    if len(np.unique(hits.values[:,1])) < 3:
+        # only has [0, 1] label, needs fixing
+        parts = hit_prediction_path.parts
+        match_name = parts[-3]
+        video_name = parts[-1].replace("_hit.csv", "")
+        hits = _fix_gt_hits_csv(hits, match_name, video_name)
 
-    hits = pd.read_csv(str(hit_prediction_path)).values
-
+    hits = hits.values
     compressed_hits = np.compress(hits[:,1] != 0, hits, axis=0)
     return {
         "frames": list(compressed_hits[:,0]),
-        "player_ids": list(compressed_hits[:,1])
+        "player_ids": list(compressed_hits[:,1]),
+        "N_frames": hits.shape[0]
     }
+
+def reconstruct_raw_from_read_hits_data(read_hits_data):
+    N_frames = read_hits_data["N_frames"]
+    data = np.zeros((N_frames, 2), dtype=int)
+    data[:,0] = range(N_frames)
+    for z in zip(read_hits_data["frames"], read_hits_data["player_ids"]):
+        data[z[0],1] = z[1]
+    df = pd.DataFrame(data=data, columns=["frame", "hit"])
+    return df
+
+def read_point_won(point_won_path):
+    assert point_won_path.is_file(), f"Invalid path for point won data: {point_won_path}"
+    return pd.read_csv(point_won_path).loc[0]
+
+if __name__ == "__main__":
+    from pathlib import Path 
+    import pandas as pd
+    hit_file = Path("/sensei-fs/users/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/test_match3/shot")
+    csv = pd.read_hits(hit_file)
+    hits = read_hits(hit_file)
+    reconstruct_raw_from_read_hits_data(hits)
