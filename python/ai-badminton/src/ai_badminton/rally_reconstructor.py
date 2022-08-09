@@ -93,12 +93,11 @@ class RallyReconstructor:
         Cg = 0.2
 
         initg = np.concatenate([xg, vg, np.array([Cg])])
-        bounds = [(0, 6.1), (0, 13.4), (0.1, 6)] + [(-150, 150)] * 3 +  [(0, 0.4)]
-
-        bounds = [(0, 6.1), (0, 13.4 / 2), (0.1, 6)] + [(-150, 150)] + [(0, 150)] + [(-150, 150)] +  [(0, 0.4)]
+        velocity_bound = 120.0
+        bounds = [(0, 6.1), (0, 13.4 / 2), (0.0, 3.0)] + [(-velocity_bound, velocity_bound)] + [(0, velocity_bound)] + [(-velocity_bound, velocity_bound)] +  [(0, 0.4)]
         if xg[1] > 13.4 / 2:
             bounds[1] = (13.4 / 2, 13.4)
-            bounds[4] = (-150, 0)
+            bounds[4] = (-velocity_bound, 0)
 
         camProj = self.court3d.camProj
         norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)**(-2)
@@ -108,7 +107,7 @@ class RallyReconstructor:
         loss_scale_net = 100.0 # cannot net unless it is the last shot. If use inf then inf*0.0 = nan so I chose a randomly large number
         if reconstructing_last_shot:
             loss_scale_net = 0.1
-        loss_scale_net = 0.0 # FIXME debug
+        loss_scale_net = 0.0 #FIXME debug. trying the constraint
 
         def get_trajectory(p):
             x = np.array(p[:3])
@@ -196,11 +195,58 @@ class RallyReconstructor:
                 loss_scale_out * total_loss["out"] +
                 loss_scale_net * total_loss["net"]
             )
-
+        
+        def constraint_ineq_higher_than_net_when_crossing(p):
+            clearance = 0.03
+            def delta_takes_trajectory_pass_net(x, new_x):
+                return (x[1] - 13.41/2.0) * (new_x[1] - 13.41/2.0) < 0
+            traj = np.array(get_trajectory(p))
+            for idx, x in enumerate(traj[:-1]):
+                old_x = x
+                new_x = traj[idx+1]
+                if delta_takes_trajectory_pass_net(old_x, new_x):
+                    break
+            return x[2] - (1.55 + clearance)
+    
+        def constraint_eq_endpoint_smooth(p):
+            return p[:3] - xg
+        
+        def constraint_ineq_endpoint_in_other_court(p):
+            traj = np.array(get_trajectory(p))
+            for idx, x in enumerate(traj):
+                if x[2] <= 0.0:
+                    break
+            if xg[1] > 13.41 / 2:
+                return 13.41 / 2.0 - x[1]
+            else:
+                return x[1] - 13.41 / 2.0
+            
+        def constraint_ineq_above_ground(p):
+            traj = np.array(get_trajectory(p))
+            return min(traj[:,2]) 
+        
         res = scipy.optimize.minimize(
-            f, initg, bounds=bounds,
+            f,
+            initg,
+            bounds=bounds,
+            constraints=[{
+                "type": "ineq",
+                "fun": constraint_ineq_higher_than_net_when_crossing
+            }, {
+                "type": "eq",
+                "fun": constraint_eq_endpoint_smooth
+            }, {
+                "type": "ineq",
+                "fun": constraint_ineq_endpoint_in_other_court
+            }, {
+                "type": "ineq",
+                "fun": constraint_ineq_above_ground
+            }
+            ],
             method='SLSQP'
         )
+        if not res.success:
+            tqdm.tqdm.write("**WARNING** Optimization was not successful. Result = ", res)
         est_traj = np.array(get_trajectory(res.x))
         return est_traj
 
