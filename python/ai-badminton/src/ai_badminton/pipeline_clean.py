@@ -402,6 +402,11 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
             continue
 
         video_name = video_path.stem
+        
+        # FIXME debug START
+        if video_name != "1_08_08":
+            continue
+        # FIXME debug END
        
         print(f"Processing video for 3d trajectory reconstruction: {video_name}")
 

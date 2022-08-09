@@ -104,7 +104,11 @@ class RallyReconstructor:
         norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)**(-2)
         loss_scale_reprojection = 1.0
         loss_scale_drift = 10.0
-        loss_scale_out = 0.1
+        loss_scale_out = 0.2
+        loss_scale_net = 100.0 # cannot net unless it is the last shot. If use inf then inf*0.0 = nan so I chose a randomly large number
+        if reconstructing_last_shot:
+            loss_scale_net = 0.1
+        loss_scale_net = 0.0 # FIXME debug
 
         def get_trajectory(p):
             x = np.array(p[:3])
@@ -134,6 +138,7 @@ class RallyReconstructor:
             pord = 2
             out_loss = 0
             drift_loss = np.linalg.norm(x[:2] - s2d, ord=pord)**2
+            net_loss = 0
             tid = T[0]
             
             count_reprojection = 0
@@ -167,12 +172,29 @@ class RallyReconstructor:
                         out_loss += np.linalg.norm(out_amount, ord=pord)**2
                         if not reconstructing_last_shot:
                             drift_loss += np.linalg.norm(x[:2] - e2d, ord=pord)**2
-                x += dt * v
-
+                dx = dt * v
+                
+                def delta_takes_trajectory_pass_net(x, dx):
+                    return (x[1] - 13.41/2.0) * ((x[1] + dx[1]) - 13.41/2.0) < 0
+                
+                def point_on_net(x):
+                    return x[2] >= 0 and x[2] <= (1.55 + 0.01)
+                
+                if delta_takes_trajectory_pass_net(x, dx) and point_on_net(x):
+                    net_loss = 1.0
+                x += dx
+                
+            total_loss = {
+                "reprojection": norm_scale * reprojection_loss / count_reprojection,
+                "drift": drift_loss,
+                "out": out_loss,
+                "net": net_loss
+            }
             return (
-                loss_scale_reprojection * norm_scale * reprojection_loss / count_reprojection +
-                loss_scale_drift * drift_loss +
-                loss_scale_out * out_loss
+                loss_scale_reprojection * total_loss["reprojection"] +
+                loss_scale_drift * total_loss["drift"] +
+                loss_scale_out * total_loss["out"] +
+                loss_scale_net * total_loss["net"]
             )
 
         res = scipy.optimize.minimize(
