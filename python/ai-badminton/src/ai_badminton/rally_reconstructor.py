@@ -78,7 +78,7 @@ class RallyReconstructor:
             self.trajectory = traj_filter.filter_trajectory(trajectory)
         self.hits = hits
 
-    def reconstruct_one_hit(self, s2d, e2d, T, s3d=None, fps=25, fr_adjust=30./25):
+    def reconstruct_one_hit(self, s2d, e2d, T, s3d=None, fps=25, fr_adjust=30./25, reconstructing_last_shot=False):
         substeps = 30
         g = np.array([0, 0, -9.8])
         height_guess = 1.7
@@ -96,12 +96,15 @@ class RallyReconstructor:
         bounds = [(0, 6.1), (0, 13.4), (0.1, 6)] + [(-150, 150)] * 3 +  [(0, 0.4)]
 
         bounds = [(0, 6.1), (0, 13.4 / 2), (0.1, 6)] + [(-150, 150)] + [(0, 150)] + [(-150, 150)] +  [(0, 0.4)]
-        if s2d[1] > 13.4 / 2:
+        if xg[1] > 13.4 / 2:
             bounds[1] = (13.4 / 2, 13.4)
             bounds[4] = (-150, 0)
 
         camProj = self.court3d.camProj
-        norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)
+        norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)**(-2)
+        loss_scale_reprojection = 1.0
+        loss_scale_drift = 10.0
+        loss_scale_out = 0.1
 
         def get_trajectory(p):
             x = np.array(p[:3])
@@ -125,13 +128,15 @@ class RallyReconstructor:
             v = np.array(p[3:-1])
             C = np.array(p[-1])
 
-            loss = 0
+            reprojection_loss = 0
             dt = fr_adjust / (fps * substeps)
 
-            pord = 6
-            drift_loss, out_loss = 0, 0
+            pord = 2
+            out_loss = 0
+            drift_loss = np.linalg.norm(x[:2] - s2d, ord=pord)**2
             tid = T[0]
-
+            
+            count_reprojection = 0
             for t in range(1, substeps * N + 1):
                 v += dt * (g - C * np.linalg.norm(v) * v)
 
@@ -140,7 +145,8 @@ class RallyReconstructor:
                     z = q[:2] / q[2]
                     if self.trajectory.X[tid] != 0 and self.trajectory.X[tid] == self.trajectory.X[tid]:
                         z_ = np.array([self.trajectory.X[tid], self.trajectory.Y[tid]])
-                        loss += np.linalg.norm(z - z_, ord=pord)**pord
+                        reprojection_loss += np.linalg.norm(z - z_, ord=pord)**2
+                        count_reprojection += 1
 
                     tid += 1
                     if tid == T[1]:
@@ -152,14 +158,22 @@ class RallyReconstructor:
                             xc += dt * vc
                             vc += dt * (g - C * np.linalg.norm(vc) * vc)
 
-                        out_loss += max(0 - xc[0], xc[0] - 6.1, 0)**pord
-                        out_loss += max(0 - xc[1], xc[1] - 13.4, 0)**pord
-                        out_loss += max(0 - xc[2], xc[2] - 3., 0)**pord
-                        drift_loss += np.linalg.norm(x[:2] - e2d)**pord
+                        out_amount = np.array([
+                            max(0 - xc[0], xc[0] - 6.1, 0),
+                            max(0 - xc[1], xc[1] - 13.4, 0),
+                            max(0 - xc[2], xc[2] - 3., 0)
+                        ])
+                            
+                        out_loss += np.linalg.norm(out_amount, ord=pord)**2
+                        if not reconstructing_last_shot:
+                            drift_loss += np.linalg.norm(x[:2] - e2d, ord=pord)**2
                 x += dt * v
 
-            pinv = 1. / pord
-            return loss**pinv + (norm_scale * drift_loss)**pinv
+            return (
+                loss_scale_reprojection * norm_scale * reprojection_loss / count_reprojection +
+                loss_scale_drift * drift_loss +
+                loss_scale_out * out_loss
+            )
 
         res = scipy.optimize.minimize(
             f, initg, bounds=bounds,
@@ -190,14 +204,17 @@ class RallyReconstructor:
         all_traj = []
         for i in tqdm.tqdm(range(len(hit_frame) - 1)):
             st, en = hit_frame[i], hit_frame[i+1]
-            tqdm.write(f"  reconstructing shot between frame {st[0]} and frame{en[0]}")
+            tqdm.tqdm.write(f"  reconstructing shot between frame {st[0]} and frame{en[0]}")
             s2d = get_location(st[1], st[0])
             e2d = get_location(en[1], en[0])
 
-            traj = self.reconstruct_one_hit(s2d, e2d, [st[0], en[0]], s3d, fps, fr_adjust)
+            reconstruct_last_shot = False
+            if i == len(hit_frame) - 2:
+                reconstruct_last_shot = True
+            traj = self.reconstruct_one_hit(s2d, e2d, [st[0], en[0]], s3d, fps, fr_adjust, reconstruct_last_shot)
             last_pt = self.court3d.project_uv(traj[-1])
             last_pix = np.array([self.trajectory.X[en[0]], self.trajectory.Y[en[0]]])
-            if np.linalg.norm(last_pt - last_pix) < 40 and (recon_first or i != 0):
+            if (recon_first or i != 0):
                 s3d = traj[-1]
             else:
                 s3d = None
