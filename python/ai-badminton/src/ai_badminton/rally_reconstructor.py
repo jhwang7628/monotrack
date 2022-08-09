@@ -104,12 +104,13 @@ class RallyReconstructor:
         loss_scale_reprojection = 1.0
         loss_scale_drift = 10.0
         loss_scale_out = 0.2
-        loss_scale_net = 100.0 # cannot net unless it is the last shot. If use inf then inf*0.0 = nan so I chose a randomly large number
-        if reconstructing_last_shot:
-            loss_scale_net = 0.1
-        loss_scale_net = 0.0 #FIXME debug. trying the constraint
 
-        def get_trajectory(p):
+        trajectory_cache = dict()
+        def get_trajectory_cached(p):
+            key = "-".join([f"{pp:.8f}" for pp in p.tolist()])
+            if key in trajectory_cache:
+                return trajectory_cache[key]
+            
             x = np.array(p[:3])
             v = np.array(p[3:-1])
             C = np.array(p[-1])
@@ -122,6 +123,8 @@ class RallyReconstructor:
                 if t % substeps == 0:
                     res.append(np.array(x))
                 x += dt * v
+            
+            trajectory_cache[key] = res
             return res
 
         def f(p, debug=False):
@@ -172,35 +175,24 @@ class RallyReconstructor:
                         if not reconstructing_last_shot:
                             drift_loss += np.linalg.norm(x[:2] - e2d, ord=pord)**2
                 dx = dt * v
-                
-                def delta_takes_trajectory_pass_net(x, dx):
-                    return (x[1] - 13.41/2.0) * ((x[1] + dx[1]) - 13.41/2.0) < 0
-                
-                def point_on_net(x):
-                    return x[2] >= 0 and x[2] <= (1.55 + 0.01)
-                
-                if delta_takes_trajectory_pass_net(x, dx) and point_on_net(x):
-                    net_loss = 1.0
                 x += dx
                 
             total_loss = {
                 "reprojection": norm_scale * reprojection_loss / count_reprojection,
                 "drift": drift_loss,
-                "out": out_loss,
-                "net": net_loss
+                "out": out_loss
             }
             return (
                 loss_scale_reprojection * total_loss["reprojection"] +
                 loss_scale_drift * total_loss["drift"] +
-                loss_scale_out * total_loss["out"] +
-                loss_scale_net * total_loss["net"]
+                loss_scale_out * total_loss["out"]
             )
         
         def constraint_ineq_higher_than_net_when_crossing(p):
             clearance = 0.03
             def delta_takes_trajectory_pass_net(x, new_x):
                 return (x[1] - 13.41/2.0) * (new_x[1] - 13.41/2.0) < 0
-            traj = np.array(get_trajectory(p))
+            traj = np.array(get_trajectory_cached(p))
             for idx, x in enumerate(traj[:-1]):
                 old_x = x
                 new_x = traj[idx+1]
@@ -212,7 +204,7 @@ class RallyReconstructor:
             return p[:3] - xg
         
         def constraint_ineq_endpoint_in_other_court(p):
-            traj = np.array(get_trajectory(p))
+            traj = np.array(get_trajectory_cached(p))
             for idx, x in enumerate(traj):
                 if x[2] <= 0.0:
                     break
@@ -222,32 +214,40 @@ class RallyReconstructor:
                 return x[1] - 13.41 / 2.0
             
         def constraint_ineq_above_ground(p):
-            traj = np.array(get_trajectory(p))
+            traj = np.array(get_trajectory_cached(p))
             return min(traj[:,2]) 
+        
+        constraints = [{
+            "type": "eq",
+            "fun": constraint_eq_endpoint_smooth
+        }, {
+            "type": "ineq",
+            "fun": constraint_ineq_above_ground
+        }
+        ]
+        
+        if not reconstructing_last_shot:
+            constraints += [{
+                "type": "ineq",
+                "fun": constraint_ineq_higher_than_net_when_crossing
+            }, {
+                "type": "ineq",
+                "fun": constraint_ineq_endpoint_in_other_court
+            }]
         
         res = scipy.optimize.minimize(
             f,
             initg,
             bounds=bounds,
-            constraints=[{
-                "type": "ineq",
-                "fun": constraint_ineq_higher_than_net_when_crossing
-            }, {
-                "type": "eq",
-                "fun": constraint_eq_endpoint_smooth
-            }, {
-                "type": "ineq",
-                "fun": constraint_ineq_endpoint_in_other_court
-            }, {
-                "type": "ineq",
-                "fun": constraint_ineq_above_ground
-            }
-            ],
+            options={
+                "maxiter": 500
+            },
+            constraints=constraints,
             method='SLSQP'
         )
         if not res.success:
-            tqdm.tqdm.write("**WARNING** Optimization was not successful. Result = ", res)
-        est_traj = np.array(get_trajectory(res.x))
+            tqdm.tqdm.write(f"**WARNING** Optimization was not successful. Result = {res}")
+        est_traj = np.array(get_trajectory_cached(res.x))
         return est_traj
 
     def reconstruct(self, fps, recon_first=False):

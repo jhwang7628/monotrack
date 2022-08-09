@@ -404,8 +404,8 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
         video_name = video_path.stem
         
         # FIXME debug START
-        if video_name != "1_08_08":
-            continue
+        #if video_name != "1_09_15":
+        #    continue
         # FIXME debug END
        
         print(f"Processing video for 3d trajectory reconstruction: {video_name}")
@@ -433,6 +433,7 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
         cap = cv2.VideoCapture(str(video_path))
         assert cap.isOpened(), f"Cannot open video: {video_path}"
         fps = cap.get(cv2.CAP_PROP_FPS)
+        print(f"Video has fps: {fps}")
 
         reconstructor = RallyReconstructor(
             metadata["court3d"],
