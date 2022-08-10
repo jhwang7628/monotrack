@@ -101,9 +101,12 @@ class RallyReconstructor:
 
         camProj = self.court3d.camProj
         norm_scale = np.linalg.norm(camProj[:3, :3], ord=2)**(-2)
-        loss_scale_reprojection = 1.0
-        loss_scale_drift = 10.0
-        loss_scale_out = 0.2
+        net_clearance = 0.03
+        loss_scale_reprojection = 10.0
+        loss_scale_drift = 2.0
+        loss_scale_out = 1.0
+        # disabling net loss because the constraint seems to work better even for the last shot
+        loss_scale_net = 0.0
 
         trajectory_cache = dict()
         def get_trajectory_cached(p):
@@ -126,6 +129,9 @@ class RallyReconstructor:
             
             trajectory_cache[key] = res
             return res
+        
+        def trajectory_cross_net(x1, x2):
+            return (x1[1] - 13.41/2.0) * (x2[1] - 13.41/2.0) < 0
 
         def f(p, debug=False):
             x = np.array(p[:3])
@@ -175,30 +181,36 @@ class RallyReconstructor:
                         if not reconstructing_last_shot:
                             drift_loss += np.linalg.norm(x[:2] - e2d, ord=pord)**2
                 dx = dt * v
-                x += dx
+                new_x = x + dx
+                # For the last shot, add net loss
+                if reconstructing_last_shot and trajectory_cross_net(x, new_x):
+                    net_threshold = 1.55 + net_clearance
+                    if x[2] <= net_threshold or new_x[2] <= net_threshold:
+                        net_loss = 1.0
+                x = new_x
                 
             total_loss = {
                 "reprojection": norm_scale * reprojection_loss / count_reprojection,
                 "drift": drift_loss,
-                "out": out_loss
+                "out": out_loss,
+                "net": net_loss
             }
+            tqdm.tqdm.write(f"total_loss = {total_loss}")
             return (
                 loss_scale_reprojection * total_loss["reprojection"] +
                 loss_scale_drift * total_loss["drift"] +
-                loss_scale_out * total_loss["out"]
+                loss_scale_out * total_loss["out"] +
+                loss_scale_net * total_loss["net"]
             )
         
         def constraint_ineq_higher_than_net_when_crossing(p):
-            clearance = 0.03
-            def delta_takes_trajectory_pass_net(x, new_x):
-                return (x[1] - 13.41/2.0) * (new_x[1] - 13.41/2.0) < 0
             traj = np.array(get_trajectory_cached(p))
             for idx, x in enumerate(traj[:-1]):
                 old_x = x
                 new_x = traj[idx+1]
-                if delta_takes_trajectory_pass_net(old_x, new_x):
+                if trajectory_cross_net(old_x, new_x):
                     break
-            return x[2] - (1.55 + clearance)
+            return x[2] - (1.55 + net_clearance)
     
         def constraint_eq_endpoint_smooth(p):
             return p[:3] - xg
@@ -223,17 +235,14 @@ class RallyReconstructor:
         }, {
             "type": "ineq",
             "fun": constraint_ineq_above_ground
+        }, {
+            "type": "ineq",
+            "fun": constraint_ineq_higher_than_net_when_crossing
+        }, {
+            "type": "ineq",
+            "fun": constraint_ineq_endpoint_in_other_court
         }
         ]
-        
-        if not reconstructing_last_shot:
-            constraints += [{
-                "type": "ineq",
-                "fun": constraint_ineq_higher_than_net_when_crossing
-            }, {
-                "type": "ineq",
-                "fun": constraint_ineq_endpoint_in_other_court
-            }]
         
         res = scipy.optimize.minimize(
             f,

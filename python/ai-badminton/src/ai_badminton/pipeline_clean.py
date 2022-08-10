@@ -403,11 +403,6 @@ def run_3d_trajectory_reconstruction(match_path, use_predicted_hits_trajectory=T
 
         video_name = video_path.stem
         
-        # FIXME debug START
-        #if video_name != "1_09_15":
-        #    continue
-        # FIXME debug END
-       
         print(f"Processing video for 3d trajectory reconstruction: {video_name}")
 
         metadata = read_poses_court_trajectory(match_path, video_name, use_predicted_hits_trajectory)
@@ -531,11 +526,11 @@ if __name__ == "__main__":
         #print("=== Running Point won analysis ===")
         #normalize_raw_point_won_data(match_dir)
 
-        print("=== Running 3D reconstruction ===")
-        run_3d_trajectory_reconstruction(match_dir, False)
+        #print("=== Running 3D reconstruction ===")
+        #run_3d_trajectory_reconstruction(match_dir, False)
         
-        #print("=== Running match summary analysis ===")
-        #create_match_summary(match_dir, use_predicted_labels=False)
+        print("=== Running match summary analysis ===")
+        create_match_summary(match_dir, use_predicted_labels=False)
 
     # debugging
     #run_shuttle_detection(Path("/home/juiwang/ai-badminton/data/tracknetv2_042022/profession_dataset/match1_cp"))
