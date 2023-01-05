@@ -31,7 +31,7 @@ import copy
 
 # TrackNet dependencies
 import sys
-sys.path.insert(0, "/sensei-fs/users/juiwang/ai-badminton/code/ai-badminton/TrackNetv2/3_in_3_out")
+sys.path.insert(0, "/home/work_space/ai-badminton-private/modified-tracknet")
 from tracknet_improved import custom_loss
 from utils import custom_time, get_coordinates
 from constants import NUM_CONSEC, HEIGHT, WIDTH, grayscale
@@ -187,7 +187,7 @@ def run_court_detection_on_match(match_dir):
 
 def tracknet_inference(video_path, weights_path, output_path):
 
-    print("tracnet_inference")
+    print("tracknet_inference")
     model = load_model(str(weights_path), custom_objects={"custom_loss": custom_loss})
     imgs_input = Input(shape=(NUM_CONSEC, HEIGHT, WIDTH, 3))
     x = K.permute_dimensions(imgs_input, (0, 1, 4, 2, 3))
